@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desert Kingdom</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="terrain-canvas"></canvas>
+        <canvas id="building-canvas"></canvas>
+        <div id="ui-container">
+            <div id="mode-indicator" class="mode-selection">Selection Mode</div>
+            <div id="building-selector">
+                <div>Select Building Type:</div>
+                <!-- Building buttons will be added by JavaScript -->
+            </div>
+        </div>
+        <div id="selection-menu">
+            <div id="selection-content">
+                <!-- Selection properties will be added here dynamically -->
+            </div>
+        </div>
+        <div id="resource-menu">
+            <div id="resource-content">
+                <!-- Resource items will be added here dynamically -->
+            </div>
+        </div>
+        <div id="message-menu" class="hidden"></div>
+    </div>
+
+    <!-- Import game modules -->
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

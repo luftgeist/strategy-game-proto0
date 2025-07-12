@@ -1,0 +1,252 @@
+:root {
+    --menu-bgcolor: #C4A484;
+    --menu-color: #8B4513;
+    --menu-color2: black;
+    --button-bgcolor: #C4A484;
+    --button-color: #8B4513;
+    --button-hv-bgcolor: #C4A484 ;
+    --button-hv-color: #8B4513;
+    --button-cl-bgcolor: rgb(76, 0, 255);
+    --button-cl-color: orange;
+    --button-x-bgcolor: darkgray;
+    --button-x-color: gray;
+    --table-bgcolor: rgba(0,0,0,0);
+    --terrain-bgcolor: #C4A484;
+    --selection0-bgcolor: #C4A484;
+    --selection1-bgcolor: rgb(23, 173, 141);
+    --selection-color: red;
+}
+
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: var(--table-bgcolor);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: Arial, sans-serif;
+}
+
+#game-container {
+    position: relative;
+    width: 100vw;  
+    height: 100vh; 
+    overflow: hidden;
+}
+
+canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 20px;
+}
+
+#terrain-canvas {
+    z-index: 1;
+    background-color: var(--terrain-bgcolor);
+}
+
+#building-canvas {
+    z-index: 2;
+}
+
+#ui-container {
+    position: absolute;
+    top: 10%;
+    left: 10px;
+    z-index: 3;
+    background-color: var(--menu-bgcolor);
+    padding: 10px;
+    border: double var(--menu-color);
+    border-width: 5px;
+    border-radius: 5px;
+    color: var(--menu-color);
+    width: 120px;
+    height: 80%;
+}
+
+button {
+    margin: 5px;
+    padding: 5px 10px;
+    cursor: pointer;
+    background-color: var(--button-bgcolor);
+    border: 1px solid var(--button-color);
+    border-radius: 3px;
+    transition: background-color 0.2s;
+    text-align: center !important;
+    font-weight: bold;
+}
+
+button:hover {
+    background-color: var(--button-hv-bgcolor);
+    color: var(--button-hv-color);
+}
+
+button:disabled {
+    background-color: var(--button-x-bgcolor);
+    color: var(--button-x-color);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+#building-selector {
+    margin-top: 10px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+#building-selector button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin: 5px 0;
+}
+
+/* Category-specific styles */
+.category-header {
+    font-weight: bold;
+    margin: 10px 0 5px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--menu-color2);
+    color: var(--menu-color2);
+}
+
+.category-button {
+    width: 100%;
+    margin-bottom: 8px !important;
+}
+
+
+/*.back-button:hover {
+}*/
+
+button:active {
+    background-color: var(--button-cl-bgcolor) !important;
+    color: var(--button-cl-color) !important;
+}
+
+.selected {
+    background-color: var(--button-cl-bgcolor) !important;
+    color: var(--button-cl-color) !important;
+}
+
+#selection-menu {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    z-index: 3;
+    background-color: var(--menu-bgcolor);
+    padding: 15px;
+    border: double var(--menu-color);
+    border-width: 5px;
+    border-radius: 5px;
+    color: var(--menu-color2);
+    width: 220px;
+    display: none;
+}
+
+#selection-menu h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--menu-color2);
+    padding-bottom: 5px;
+}
+
+#selection-menu button {
+    width: 100%;
+    margin: 5px 0;
+}
+
+#mode-indicator {
+    padding: 5px;
+    margin-bottom: 10px;
+    text-align: center;
+    border: double var(--button-color);
+    border-radius: 20px;
+    font-weight: bold;
+    color: var(--menu-color2)
+}
+
+.mode-selection {
+    background-color: var(--selection0-bgcolor);
+}
+
+.mode-building {
+    background-color: var(--selection1-bgcolor);
+}
+
+#resource-menu {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%) ;
+    z-index: 3;
+    background-color: var(--menu-bgcolor);
+    padding: 5px;
+    border: double var(--menu-color);
+    border-width: 5px;
+    border-radius: 15px;
+    color: var(--menu-color2);
+    width: 97%;
+}
+
+#resource-content {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    row-gap: 10px;
+}
+
+.resource-icon {
+    height: 20px;
+    width: 20px;
+    padding-right: 4px;
+    padding-left: 5px;
+}
+
+.resource-item {
+    width: 5.8%;
+    display: flex;
+}
+
+.resource-positive {
+    color: #4CAF50;
+}
+
+.resource-negative {
+    color: #F44336;
+}
+
+.resource-neutral {
+    color: #FFD700;
+}
+
+.cost-not-met {
+    color: #F44336;
+    font-weight: bold;
+}
+
+#message-menu {
+    position: fixed;
+    top: 5vh;
+    left: 50%;
+    opacity: 1;
+    transform: translateX(-50%) ;
+    transition: opacity 1s;
+    background-color: var(--menu-bgcolor);
+    padding: 5px;
+    border: double var(--menu-color);
+    border-width: 5px;
+    border-radius: 15px;
+    color: var(--menu-color2);
+    width: 80vw;
+    z-index: 4;
+}
+
+#message-menu.hidden {
+    opacity: 0;
+}
