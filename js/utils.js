@@ -3,7 +3,7 @@ export function loadImg(src){
 
     img.loaded = new Promise((resolve, reject) => {
         img.onload = () => resolve(img);
-        img.onerror = (e) => reject(new Error(`Failed to load image: ${path}`));
+        img.onerror = (e) => reject(new Error(`Failed to load image: ${img.src}`));
     });
     
     return img;
