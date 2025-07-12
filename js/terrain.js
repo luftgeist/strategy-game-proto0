@@ -180,53 +180,6 @@ export function getTerrainTypeAtPosition(terrain, x, y, mapWidth, mapHeight, wat
     }
 }
 
-// Draw the terrain based on current viewport using ImageData for better performance
-export function drawTerrain() {
-    const terrainCtx = gameInstance.terrainCtx;
-    const terrain = gameInstance.state.terrain;
-    const viewportX = gameInstance.state.viewportX;
-    const viewportY = gameInstance.state.viewportY;
-    const zoom = gameInstance.state.zoom;
-    const config = gameInstance.config;
-    const waterLevel = gameInstance.state.waterLevel || 0;
-
-    terrainCtx.clearRect(0, 0, config.viewportWidth, config.viewportHeight);
-    
-    // Create ImageData for the viewport
-    const imageData = terrainCtx.createImageData(config.viewportWidth, config.viewportHeight);
-    const data = imageData.data;
-    
-    // Fill the imageData
-    for (let y = 0; y < config.viewportHeight; y++) {
-        for (let x = 0; x < config.viewportWidth; x++) {
-            // Calculate the corresponding position in the terrain
-            const terrainX = Math.floor(viewportX + x / zoom);
-            const terrainY = Math.floor(viewportY + y / zoom);
-            
-            // Skip if outside of map bounds
-            if (terrainX < 0 || terrainX >= config.mapWidth || terrainY < 0 || terrainY >= config.mapHeight) {
-                continue;
-            }
-            
-            // Get height value and color
-            const [height, alpha, flags1, flags2] = terrain[terrainY][terrainX];
-            const color = getTerrainColor(height, alpha, flags1, waterLevel);
-
-            // Calculate pixel index in the imageData array (4 bytes per pixel: R,G,B,A)
-            const index = (y * config.viewportWidth + x) * 4;
-
-            
-            // Set pixel color
-            data[index] = color.r;     // Red
-            data[index + 1] = color.g; // Green
-            data[index + 2] = color.b; // Blue
-            data[index + 3] = alpha; // Alpha 
-        }
-    }
-    
-    // Draw the entire image at once
-    terrainCtx.putImageData(imageData, 0, 0);
-}
 
 export function scaleTerrain(terrain, scaleFactor = 2){
     const new_terrain = [];
@@ -273,8 +226,6 @@ export function scaleTerrain(terrain, scaleFactor = 2){
 export function genMapObjects(baseTerrain, waterLevel, scaleFactor){
     const map_trees = [];
     const map_wildlife = [];
-    let storehousePos = {x: baseTerrain[0].length/2*scaleFactor, y: baseTerrain.length/2*scaleFactor};
-    let palacePos = null;
     for (let y = 0; y < baseTerrain.length; y++){
         for (let x = 0; x < baseTerrain[0].length; x++){
             const [height, data1, data2] = baseTerrain[y][x];
@@ -299,16 +250,6 @@ export function genMapObjects(baseTerrain, waterLevel, scaleFactor){
                 X+=Math.floor((random.next()-0.5)*scaleFactor*10)
                 Y+=Math.floor((random.next()-0.5)*scaleFactor*10)
                 map_wildlife.push({x: X, y: Y, m: Math.floor(random.next()*3), type: 'deer'})
-
-                /*if (!storehousePos) {
-                    if ((y > baseTerrain.length/4*1 && y < baseTerrain.length/4*3) &&
-                        (x > baseTerrain[0].length/4*1 && x < baseTerrain[0].length/4*3)){
-                            storehousePos = {
-                                x: x*scaleFactor,
-                                y: y*scaleFactor
-                            }
-                        }
-                }*/
             }
         }
     }
@@ -316,7 +257,88 @@ export function genMapObjects(baseTerrain, waterLevel, scaleFactor){
     map_wildlife.sort((a,b)=>a.y-b.y);
     map_trees.sort((a,b)=>a.y-b.y);
 
-    return {map_trees, map_wildlife, storehousePos};
+    return {map_trees, map_wildlife };
+}
+
+export async function initTerrain(state, config){
+    // generating giant terrain will take a lot of time, so we generate initial terrain and scale it
+    const base_terrain = generateSmoothTerrain(
+        Math.ceil(config.mapWidth/config.terrain_scaling), 
+        Math.ceil(config.mapHeight/config.terrain_scaling)
+    );
+    const terrain = scaleTerrain(base_terrain, config.terrain_scaling);
+
+    const { map_trees, map_wildlife } = genMapObjects(base_terrain, state.waterLevel, config.terrain_scaling);
+
+    const terrainCanvas = createTerrainCanvas(config, terrain, state.waterLevel);
+    const terrainBitmap = await createTerrainBitmap(terrainCanvas);
+
+    return {map_trees, map_wildlife, terrain, terrainBitmap }
+}
+
+function createTerrainCanvas(config, terrain, waterLevel) {
+    // Create off-screen canvas for the entire map
+    const terrainCanvas = document.createElement('canvas');
+    terrainCanvas.width = config.mapWidth;
+    terrainCanvas.height = config.mapHeight;
+    const ctx = terrainCanvas.getContext('2d');
+    
+    // Create ImageData for the entire map
+    const imageData = ctx.createImageData(config.mapWidth, config.mapHeight);
+    const data = imageData.data;
+    
+    // Render the entire terrain
+    for (let y = 0; y < config.mapHeight; y++) {
+        for (let x = 0; x < config.mapWidth; x++) {
+            const [height, alpha, flags1, flags2] = terrain[y][x];
+            const color = getTerrainColor(height, alpha, flags1, waterLevel);
+            
+            const index = (y * config.mapWidth + x) * 4;
+            data[index] = color.r;
+            data[index + 1] = color.g;
+            data[index + 2] = color.b;
+            data[index + 3] = alpha;
+        }
+    }
+    
+    // Draw to canvas
+    ctx.putImageData(imageData, 0, 0);
+    
+    return terrainCanvas;
+}
+
+async function createTerrainBitmap(terrainCanvas) {
+    // Convert to ImageBitmap for better performance
+    const bitmap = await createImageBitmap(terrainCanvas);
+    
+    // Clean up the canvas since we have the bitmap
+    terrainCanvas.width = 0;
+    terrainCanvas.height = 0;
+    
+    return bitmap;
+}
+
+// Then in your draw function:
+export function drawTerrain() {
+    const terrainCtx = gameInstance.terrainCtx;
+    const config = gameInstance.config;
+    const viewportX = gameInstance.state.viewportX;
+    const viewportY = gameInstance.state.viewportY;
+    const zoom = gameInstance.state.zoom;
+    
+    terrainCtx.clearRect(0, 0, config.viewportWidth, config.viewportHeight);
+    
+    terrainCtx.drawImage(
+        gameInstance.state.terrain_bitmap,   
+        viewportX,                           
+        viewportY,                           
+        config.viewportWidth / zoom,           
+        config.viewportHeight / zoom,        
+        0,
+        0,                
+        config.viewportWidth,            
+        config.viewportHeight
+    );
 }
 
 export function drawMapObjects(){
@@ -327,6 +349,7 @@ export function drawMapObjects(){
     const viewportY = gameInstance.state.viewportY;
     const zoom = gameInstance.state.zoom;
     const config = gameInstance.config;
+    const RENDER_EDGE = 50;
     // Calculate the visible area
     const treeImg = treeImgs[0];
     const startX = viewportX;
@@ -335,14 +358,18 @@ export function drawMapObjects(){
     const endY = startY + config.viewportHeight / zoom;
     const baseWidth = treeImg.naturalWidth * 0.5 * zoom;
     const baseHeight = treeImg.naturalHeight * 0.5 * zoom;
+    const padded_startX = startX - RENDER_EDGE;
+    const padded_startY = startY - RENDER_EDGE;
+    const padded_endX = endX + RENDER_EDGE;
+    const padded_endY = endY + RENDER_EDGE;
     for(let tree of map_trees){
         const x = tree.x;
         const y = tree.y;
         if (
-            x > startX &&
-            x < endX &&
-            y > startY &&
-            y < endY
+            x > padded_startX &&
+            x < padded_endX &&
+            y > padded_startY &&
+            y < padded_endY
         ) {
             // Calculate position in viewport
             const viewX = (x - startX) * zoom;
@@ -369,10 +396,10 @@ export function drawMapObjects(){
     }
     for (let w of map_wildlife){
         if (
-            w.x > startX &&
-            w.x < endX &&
-            w.y > startY &&
-            w.y < endY
+            w.x > padded_startX &&
+            w.x < padded_endX &&
+            w.y > padded_startY &&
+            w.y < padded_endY
         ) {
             const viewX = (w.x - startX) * zoom;
             const viewY = (w.y - startY) * zoom;
@@ -381,4 +408,3 @@ export function drawMapObjects(){
         
     }
 }
-

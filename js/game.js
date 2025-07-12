@@ -1,6 +1,6 @@
 // Game class for handling game logic and state
 import { Graph } from './graph.js';
-import { drawTerrain, generateSmoothTerrain, scaleTerrain, genMapObjects, drawMapObjects } from './terrain.js';
+import { drawTerrain, drawMapObjects, initTerrain } from './terrain.js';
 import { 
     createBuildingVertex, drawBuildings, 
     findVertexAtPosition, findEdgeAtPosition, handleBuildingPlacement, 
@@ -58,10 +58,12 @@ export class Game {
             animationFrame: null, // Animation frame ID
             lastFrameTime: 0,     // Last frame timestamp
             terrainNeedsRedraw: true, // Flag for terrain redraw
-            base_terrain: null,    // Will store the terrain heightmap data
+
             terrain: null,        // Will store the scaled terrain heightmap data
+            terrain_bitmap: null,
             waterLevel: 0,
             map_trees: [],
+            map_wildlife: [],
             people: new Map(),           // Array of Person objects
 
             audio: new AudioManager(), // handles Audio
@@ -133,13 +135,10 @@ export class Game {
     
     async init() {
         // Generate the terrain
-        this.state.base_terrain = generateSmoothTerrain(
-            Math.ceil(this.config.mapWidth/this.config.terrain_compression), 
-            Math.ceil(this.config.mapHeight/this.config.terrain_compression)
-        );
-        this.state.terrain = scaleTerrain(this.state.base_terrain, this.config.terrain_compression);
+        const {terrain, terrainBitmap, map_wildlife, map_trees } = await initTerrain(this.state, this.config);
 
-        const { map_trees, map_wildlife, storehousePos } = genMapObjects(this.state.base_terrain, this.state.waterLevel, this.config.terrain_compression);
+        this.state.terrain = terrain;
+        this.state.terrain_bitmap = terrainBitmap;
         this.state.map_trees = map_trees;
         this.state.map_wildlife = map_wildlife;
 
@@ -179,6 +178,11 @@ export class Game {
                 await this.state.audio.init1();
             }
         }).bind(this));
+
+        const storehousePos = {
+            x: this.state.terrain[0].length/2, 
+            y: this.state.terrain.length/2,
+        };
 
         this.state.storehouse = await createBuildingVertex(
             'storehouse',
