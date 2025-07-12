@@ -29,7 +29,7 @@ export function createBuildingMenuCategories(buildingSelector, config, switchCat
     // Add category buttons
     config.buildingMenuCategories.forEach(category => {
         const button = document.createElement('button');
-        button.innerHTML = `<img class="resource-icon" src="/assets/i/icons/${category.icon}.png"></img>`
+        button.innerHTML = `<img class="resource-icon clicky" src="/assets/i/icons/${category.icon}.png"></img>`
         button.classList.add('category-button');
         button.addEventListener('click', () => {
             switchCategoryCallback(category);
@@ -194,7 +194,7 @@ export function addSoundToAllButtons(state) {
     // Use event capturing (third parameter set to true)
     document.addEventListener('mousedown', function(event) {
         // Check if a button was clicked
-        if (event.target.tagName === 'BUTTON'){
+        if (event.target.tagName === 'BUTTON' || event.target.classList.contains('clicky')){
             const r = Math.random();
             if (r <= 0.3) {state.audio.playOneShot('button0', {volume: 0.5}) }
             else if (r <= 0.6) {state.audio.playOneShot('button1', {volume: 0.5})}
