@@ -13,36 +13,43 @@ export function imgPath(src){
     return `/assets/i/${src}`;
 }
 
-export function drawImg(ctx, x, y, img, width, height, offsetX = 0, offsetY = 0, progress = 1) {
+export function drawImg(ctx, x, y, img, width, height, offsetX = 0, offsetY = 0, progress = 1, angle = 0) {
     if (progress <= 0) return; // Nothing to draw
-
-    if (progress === 1) {
-        ctx.drawImage(img, x + offsetX-width/2, y + offsetY-height/2, width, height);
-        return { x, y, width, height };
-    }
 
     // Save the current context state
     ctx.save();
     
+    // Always apply rotation around center
+    const centerX = x + offsetX;
+    const centerY = y + offsetY;
+    ctx.translate(centerX, centerY);
+    ctx.rotate(angle);
+
+    if (progress === 1) {
+        // Draw full image centered at origin (after rotation)
+        ctx.drawImage(img, -width/2, -height/2, width, height);
+        ctx.restore();
+        return { x, y, width, height };
+    }
+
     // Calculate the visible height based on progress
     const visibleHeight = height * progress;
     
-    // Create a clipping region
+    // Create a clipping region (in rotated coordinate space)
     ctx.beginPath();
     ctx.rect(
-        x + offsetX-width/2,
-        y + offsetY-height/2 + (height - visibleHeight), // Start from bottom
+        -width/2,
+        -height/2 + (height - visibleHeight), // Start from bottom
         width,
         visibleHeight
     );
     ctx.clip();
     
-    // Draw the image at its original position and size
-    
+    // Draw the image at its original position and size (in rotated coordinate space)
     ctx.drawImage(
         img, 
-        x + offsetX-width/2, 
-        y + offsetY-height/2, 
+        -width/2, 
+        -height/2, 
         width, 
         height
     );
@@ -50,7 +57,7 @@ export function drawImg(ctx, x, y, img, width, height, offsetX = 0, offsetY = 0,
     // Restore the context state
     ctx.restore();
 
-    return { x, y, width, height}
+    return { x, y, width, height };
 }
 
 export function shuffle(array) {

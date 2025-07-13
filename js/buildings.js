@@ -129,30 +129,54 @@ export function drawBuildings(drawBottom = false, time) {
         const data = vertex.data;
         const width = data.width;
         const height = data.height;
+        const padded_startX = startX - gameInstance.config.renderEdge * zoom;
+        const padded_startY = startY - gameInstance.config.renderEdge * zoom;
+        const padded_endX = endX + gameInstance.config.renderEdge * zoom;
+        const padded_endY = endY + gameInstance.config.renderEdge * zoom;
         if (
-            x + width > startX &&
-            x < endX &&
-            y + height > startY &&
-            y < endY
+            x + width > padded_startX &&
+            x < padded_endX &&
+            y + height > padded_startY &&
+            y < padded_endY
         ) {
             // Calculate position in viewport
             const viewX = (x - startX) * zoom;
             const viewY = (y - startY) * zoom;
             const scaledWidth = width * zoom;
             const scaledHeight = height * zoom;
-           
-            // Draw the building normally using the render function from buildingType
-            buildingType.render(buildingCtx, viewX, viewY, scaledWidth, scaledHeight, zoom, vertex, buildingType.img);
             
             // Highlight selected vertex if any
             if (selectedVertex === vertex) {
-                buildingCtx.beginPath()
-                buildingCtx.strokeStyle = selection_color;
-                buildingCtx.lineWidth = 1;
-                buildingCtx.roundRect(viewX-scaledWidth/2, viewY-scaledHeight/2, scaledWidth, scaledHeight, 5);
-                buildingCtx.stroke();
+                buildingCtx.save();
+                buildingCtx.translate(viewX, viewY);
                 buildingCtx.beginPath();
+                buildingCtx.strokeStyle = selection_color;
+                buildingCtx.lineWidth = 4;
+                buildingCtx.roundRect(-scaledWidth/2, -scaledHeight/2, scaledWidth, scaledHeight, 5);
+                buildingCtx.stroke();
+                buildingCtx.restore();
+
+                /*buildingCtx.save();
+                buildingCtx.translate(viewX, viewY);           // Move to center
+                buildingCtx.beginPath();
+                buildingCtx.strokeStyle = selection_color;
+                buildingCtx.lineWidth = 4;
+
+                
+                const halfWidth = scaledWidth / 2 / 0.577;
+                const halfHeight = scaledHeight / 2;
+
+                buildingCtx.moveTo(0, halfHeight);
+                buildingCtx.lineTo(halfWidth, 0); 
+                buildingCtx.lineTo(0, -halfHeight);   
+                buildingCtx.lineTo(-halfWidth, 0);  
+                buildingCtx.closePath();
+
+                buildingCtx.stroke();
+                buildingCtx.restore();*/
             }
+
+            buildingType.render(buildingCtx, viewX, viewY, scaledWidth, scaledHeight, zoom, vertex, buildingType.img);
         }
     });
 }

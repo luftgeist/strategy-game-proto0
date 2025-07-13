@@ -155,9 +155,15 @@ button:active {
     padding-bottom: 5px;
 }
 
-#selection-menu button {
+#selection-menu button, #options button {
     width: 100%;
     margin: 5px 0;
+}
+
+#options {
+    background-color: var(--menu-bgcolor);
+    padding: 5px;
+    border: double var(--menu-color);
 }
 
 #mode-indicator {

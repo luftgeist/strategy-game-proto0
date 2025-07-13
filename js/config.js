@@ -7,6 +7,7 @@ import { loadImg, drawImg } from "./utils.js";
 const roadPattern = createRoadPattern(document.querySelector('#building-canvas'), 'black');
 
 const palaceImg = loadImg('palace0_3_.png');
+const townsquareImg = loadImg('plaza2.png');
 const houseImg = loadImg('house1_1.png');
 const farmImg = loadImg('house1_1.png');
 const storehouseImg = loadImg('storehouse0_1.png');
@@ -15,17 +16,25 @@ const buildsite1Img = loadImg('buildsite1.png');
 
 
 const config = {
-    mapSeed: 1234589,
+    mapSeed: 5,
     mapWidth: Math.floor(window.innerWidth * 2),       // Total map width
     mapHeight: Math.floor(window.innerHeight * 2),      // Total map height
     terrain_scaling: 8, // must be 2, 4, 8, 16, the bigger the mapsize the bigger the value
     viewportWidth: Math.floor(window.innerWidth * 1),   // Visible viewport width (80% of window)
     viewportHeight: Math.floor(window.innerHeight * 1), // Visible viewport height (80% of window)
+    renderEdge: 50,
     initialZoom: 1.0,     // Initial zoom level
     minZoom: 0.5,         // Minimum zoom level
     maxZoom: 4.0,         // Maximum zoom level
     zoomStep: 0.1,        // How much to zoom in/out per step
     resourceUpdateInterval: 2000, // Resource production update interval in ms
+    
+    maxSpeed: 16,
+    minSpeed: 0.5,
+
+    people_size: 0.03,
+    wildlife_size: 1,
+
 
     NEEDS: {
         APPETITE: 0.2,      // Rate at which hunger increases
@@ -46,7 +55,6 @@ const config = {
         { id: 'goods', icon: 'clay'},
         { id: 'production', icon: 'beer' },
         { id: 'infrastructure', icon: 'stone' },
-        { id: 'special', icon: 'people' }
     ],
     buildingTypes: {
         house: { 
@@ -434,7 +442,7 @@ const config = {
         palace: {
             name: 'palace',
             img: palaceImg,
-            size: 4,
+            size: 3.5,
             res: {}, // Free to build
             buildingMode: 'free',
             maxWorkers: 0, // Palace don't have workers
@@ -445,6 +453,31 @@ const config = {
                 content.innerHTML = `
                     <div>Palace</div>
                     Your home
+                `; 
+            },
+            work: function(deltaTime, person) {
+                const newTarget = null;
+                return newTarget;
+            },
+            render: function(ctx, x, y, width, height, zoom, vertex, img) {
+                drawImg(ctx, x, y, img, width, height, 10*zoom, -20*zoom)
+            }
+        },
+        townsquare: {
+            name: 'townsqare',
+            img: townsquareImg,
+            size: 8,
+            drawBottom: true,
+            res: {}, // Free to build
+            buildingMode: 'free',
+            maxWorkers: 0, // Town square don't have workers
+            tag: 'special',
+            unique: true, // Only one can be built in the game
+            data: {},
+            onselect: function(vertex, selectionMenu,content) {
+                content.innerHTML = `
+                    <div>Town Square</div>
+                    
                 `; 
             },
             work: function(deltaTime, person) {
@@ -465,7 +498,7 @@ function checkBuilding(here){
         const s = gameInstance.state.audio.createSpatialSource(
             'building', 
             here.x, here.y, 
-            {sourceId: `building_${here.id}`, loop: true}
+            {sourceId: `building_${here.id}`, loop: true, speed: gameInstance.state.speed}
         );
         let handler = window.setInterval(()=>{
             if (here.data.buildingprogress >= 100){
@@ -474,7 +507,7 @@ function checkBuilding(here){
                 here.data.buildstate = 0;
                 console.log('building finished')
             } else {
-                here.data.buildingprogress++;
+                here.data.buildingprogress += gameInstance.state.speed;
             }
         }, 100);
     } 

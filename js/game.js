@@ -1,5 +1,5 @@
 // Game class for handling game logic and state
-import { Graph } from './graph.js';
+import { Graph, Edge } from './graph.js';
 import { drawTerrain, drawMapObjects, initTerrain } from './terrain.js';
 import { 
     createBuildingVertex, drawBuildings, 
@@ -10,7 +10,7 @@ import { payTax,  updateResourceMenu } from './resources.js';
 import { 
     updateBuildingSelector, showSelectionMenu, showEdgeSelectionMenu, hideSelectionMenu, 
     updateModeIndicator, createSaveLoadUI, createBuildingMenuCategories, addSoundToAllButtons,
-    setMessage,
+    setMessage, registerSpeedChangeButton,
 } from './ui.js';
 import { drawPeople, findPersonAtPosition } from './person.js';
 import { AudioManager } from './audio-manager.js';
@@ -55,6 +55,7 @@ export class Game {
             currentBuildingType: 'house',  
             currentBuildingCategory: null, // Current selected category (null if in main menu)
             
+            speed: 1,
             animationFrame: null, // Animation frame ID
             lastFrameTime: 0,     // Last frame timestamp
             terrainNeedsRedraw: true, // Flag for terrain redraw
@@ -68,6 +69,7 @@ export class Game {
 
             audio: new AudioManager(), // handles Audio
 
+            townsquare: null,
             storehouse: null,      // Direct reference to the storehouse vertex
             palace: null, 
 
@@ -163,6 +165,7 @@ export class Game {
         this.state.buildingGraph.addEventListener('graph-rem-edge', this.handleGraphChange);
 
         addSoundToAllButtons(this.state);
+        registerSpeedChangeButton(this.state, this.config);
 
         let hasInteracted = false;
         const audioloaded = this.state.audio.init0();
@@ -174,32 +177,44 @@ export class Game {
                 document.removeEventListener('click', initAudio);
                 await audioloaded;
                 this.state.audio.playOnChannel('background_ambiance', 'desert_ambiance', { volume: 1.5});
-                this.state.audio.playOnChannel('background_music', 'music', {volume: 0.15});
+                //this.state.audio.playOnChannel('background_music', 'music', {volume: 0.15});
                 await this.state.audio.init1();
             }
         }).bind(this));
 
-        const storehousePos = {
+        const map_center = {
             x: this.state.terrain[0].length/2, 
             y: this.state.terrain.length/2,
         };
 
+        this.state.townsquare = await createBuildingVertex(
+            'townsquare',
+            map_center.x,
+            map_center.y,
+            this.config.buildingTypes
+        );
+
         this.state.storehouse = await createBuildingVertex(
             'storehouse',
-            storehousePos.x,
-            storehousePos.y,
+            map_center.x + 80,
+            map_center.y - 80,
             this.config.buildingTypes
         );
 
         this.state.palace = await createBuildingVertex(
             'palace',
-            storehousePos.x - 200,
-            storehousePos.y - 100,
+            map_center.x - 150,
+            map_center.y - 150,
             this.config.buildingTypes
         )
-        
+
+
+        this.state.buildingGraph.addVertex(this.state.townsquare);
         this.state.buildingGraph.addVertex(this.state.storehouse);
         this.state.buildingGraph.addVertex(this.state.palace);
+
+        this.state.buildingGraph.addEdge(new Edge(this.state.palace, this.state.townsquare, 'road', 0, null));
+        this.state.buildingGraph.addEdge(new Edge(this.state.storehouse, this.state.townsquare, 'road', 0, null));
 
         
         // Start animation loop
@@ -282,7 +297,7 @@ export class Game {
             this.isPaused = false;
         }
         
-        if ((timestamp % (this.state.game_env.taxmins * 60 * 1000)) < 16) {
+        if ((timestamp % (this.state.game_env.taxmins * 60 * 1000)) < (16 / this.state.speed)) {
             payTax();
         }
         
@@ -300,7 +315,7 @@ export class Game {
                 const oldState = person.state;
                 const oldRoad = person.onRoad;
                 
-                person.update(deltaTime, this.state.storehouse);
+                person.update(deltaTime*this.state.speed, this.state.storehouse);
                 
                 // Ensure person's position stays within map bounds
                 person.x = Math.max(0, Math.min(person.x, this.config.mapWidth));

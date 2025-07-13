@@ -39,6 +39,7 @@ export class Person {
         this.gender = gender || (this.id % 2 === 0) ? 'f' : 'm';
         const rand = Math.floor(Math.random()*10);
         this.name = name ||  (gender === 'f') ? FEMALE_NAMES[rand] : MALE_NAMES[rand];
+        this.walking = 0;
         
         this.home = null; 
         this.workplace = null;  
@@ -167,8 +168,8 @@ export class Person {
         const directionY = (target.y - this.y) / distanceToTarget;
         
         // Cap deltaTime to prevent huge jumps
-        const cappedDeltaTime = Math.min(deltaTime, 100);
-        
+        const cappedDeltaTime = Math.min(deltaTime, 500);
+
         // Calculate move speed with capped deltaTime
         let moveSpeed = this.baseSpeed * (cappedDeltaTime / 16.67);  // 16.67ms is approx one frame at 60fps
         
@@ -191,6 +192,7 @@ export class Person {
         // Regular movement
         this.x += directionX * moveDistance;
         this.y += directionY * moveDistance;
+        this.walking += 0.25 * gameInstance.state.speed;
         return false;
         
     }
@@ -418,10 +420,12 @@ export function drawPeople() {
         if (screenX >= -10 && screenX <= ctx.canvas.width + 10 &&
             screenY >= -10 && screenY <= ctx.canvas.height + 10) {
             
-            const width = img_male.naturalWidth*zoom*0.03
-            const height = img_male.naturalHeight*zoom*0.02
+            const width = img_male.naturalWidth*zoom*gameInstance.config.people_size;
+            const height = img_male.naturalHeight*zoom*gameInstance.config.people_size;
+
+            const jump = Math.sin(person.walking) * 1;
             
-            drawImg(ctx, screenX, screenY, img_male, width , height , -width/2, -height/2)
+            drawImg(ctx, screenX, screenY, img_male, width , height , 0, 0+jump, 1,)
         }
     });
 }

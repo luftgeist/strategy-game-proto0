@@ -3,7 +3,7 @@ import config from './config.js'
 
 const treeImgs = [];
 for (let i = 0; i < 7; i++){
-    treeImgs.push(loadImg(`tree${i}_c.png`))
+    treeImgs.push(loadImg(`tree_${i}_c.png`))
 }
 
 const wildlifeImgs = [];
@@ -352,16 +352,19 @@ export function drawMapObjects(){
     const RENDER_EDGE = 50;
     // Calculate the visible area
     const treeImg = treeImgs[0];
+    const deerImg = wildlifeImgs[0];
     const startX = viewportX;
     const startY = viewportY;
     const endX = startX + config.viewportWidth / zoom;
     const endY = startY + config.viewportHeight / zoom;
-    const baseWidth = treeImg.naturalWidth * 0.5 * zoom;
-    const baseHeight = treeImg.naturalHeight * 0.5 * zoom;
-    const padded_startX = startX - RENDER_EDGE;
-    const padded_startY = startY - RENDER_EDGE;
-    const padded_endX = endX + RENDER_EDGE;
-    const padded_endY = endY + RENDER_EDGE;
+    const tree_baseWidth = treeImg.naturalWidth * 0.2 * zoom;
+    const tree_baseHeight = treeImg.naturalHeight * 0.2 * zoom;
+    const deer_baseWidth = deerImg.naturalWidth * 0.5 * zoom;
+    const deer_baseHeight = deerImg.naturalHeight * 0.5 * zoom;
+    const padded_startX = startX - gameInstance.config.renderEdge * zoom;
+    const padded_startY = startY - gameInstance.config.renderEdge * zoom;
+    const padded_endX = endX + gameInstance.config.renderEdge * zoom;
+    const padded_endY = endY + gameInstance.config.renderEdge * zoom;
     for(let tree of map_trees){
         const x = tree.x;
         const y = tree.y;
@@ -390,7 +393,7 @@ export function drawMapObjects(){
             ctx.translate(viewX, viewY)
             ctx.rotate(Math.PI/180*r)
             ctx.translate(-viewX, -viewY)
-            drawImg(ctx, viewX, viewY, treeImgs[tree.m], baseWidth, baseHeight, 0, -baseHeight*0.3, length);
+            drawImg(ctx, viewX, viewY, treeImgs[tree.m], tree_baseWidth, tree_baseHeight, 0, -tree_baseHeight*0.3, length);
             ctx.restore()
         }
     }
@@ -403,7 +406,7 @@ export function drawMapObjects(){
         ) {
             const viewX = (w.x - startX) * zoom;
             const viewY = (w.y - startY) * zoom;
-            drawImg(ctx, viewX, viewY, wildlifeImgs[w.m], baseWidth*0.8, baseHeight*0.8, -baseWidth*0.6, -baseHeight*0.6, 1);
+            drawImg(ctx, viewX, viewY, wildlifeImgs[w.m], deer_baseWidth*0.8, deer_baseHeight*0.8, -deer_baseWidth*0.6, -deer_baseHeight*0.6, 1);
         }
         
     }

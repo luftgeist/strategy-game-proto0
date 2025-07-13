@@ -202,3 +202,15 @@ export function addSoundToAllButtons(state) {
         }
     }, true); // true = use capturing phase
 }
+
+export function registerSpeedChangeButton(state, config){
+    const button = document.querySelector('#game-speed-toggle');
+    button.addEventListener('click', (event)=>{
+        if (state.speed*2 <= config.maxSpeed) {
+            state.speed = state.speed * 2;
+        } else {
+            state.speed = config.minSpeed;
+        }
+        button.textContent = `Speed: ${state.speed}x`
+    })
+}
