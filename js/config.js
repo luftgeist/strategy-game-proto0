@@ -6,20 +6,20 @@ import { loadImg, drawImg } from "./utils.js";
 // Game configuration settings
 const roadPattern = createRoadPattern(document.querySelector('#building-canvas'), 'black');
 
-const palaceImg = loadImg('palace0_3_.png');
-const townsquareImg = loadImg('plaza2.png');
-const houseImg = loadImg('house1_1.png');
-const farmImg = loadImg('house1_1.png');
-const storehouseImg = loadImg('storehouse0_1.png');
-const forestryImg = loadImg('house1_1.png');
-const buildsite1Img = loadImg('buildsite1.png');
+const palaceImg = loadImg('b/palace0_3_.png');
+const townsquareImg = loadImg('b/plaza2.png');
+const houseImg = loadImg('b/house1_1.png');
+const farmImg = loadImg('b/house1_1.png');
+const storehouseImg = loadImg('b/storehouse0_1.png');
+const forestryImg = loadImg('b/house1_1.png');
+const buildsite1Img = loadImg('b/buildsite1.png');
 
 
 const config = {
     mapSeed: 5,
     mapWidth: Math.floor(window.innerWidth * 2),       // Total map width
     mapHeight: Math.floor(window.innerHeight * 2),      // Total map height
-    terrain_scaling: 8, // must be 2, 4, 8, 16, the bigger the mapsize the bigger the value
+    terrain_scaling: 4, // must be 2, 4, 8, 16, the bigger the mapsize the bigger the value
     viewportWidth: Math.floor(window.innerWidth * 1),   // Visible viewport width (80% of window)
     viewportHeight: Math.floor(window.innerHeight * 1), // Visible viewport height (80% of window)
     renderEdge: 50,

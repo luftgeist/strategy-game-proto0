@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Isometric Tile Generator</title>
+    <style>
+        body { margin: 0; font-family: Arial; display: flex; }
+        .controls { width: 50%; padding: 20px; background: #f0f0f0; }
+        .control { margin: 10px 0; }
+        label { display: block; margin-bottom: 5px; font-size: 12px; }
+        input[type="file"] { width: 100%; margin-bottom: 5px; }
+        input[type="range"] { width: 100%; }
+        select { width: 100%; padding: 4px; }
+        .value { font-size: 11px; color: #666; }
+        button { padding: 8px 15px; margin: 5px 0; }
+        #container { flex: 1; text-align: center; padding: 20px; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div class="control">
+            <label>Line Quality</label>
+            <select id="lineQuality">
+                <option value="1">1x (Standard)</option>
+                <option value="2">2x (Fine)</option>
+                <option value="4">4x (Ultra Fine)</option>
+            </select>
+        </div>
+        
+        <div class="control">
+            <label>Edge Width</label>
+            <input type="range" id="edgeWidth" min="0" max="5" step="0.5" value="1">
+            <div class="value" id="edgeWidthValue">1</div>
+        </div>
+
+        <div class="control">
+            <label>Edge Color</label>
+            <input type="color" id="edgeColor" value="#000000">
+        </div>
+        
+        <div class="control">
+            <label>Top Face</label>
+            <input type="file" id="topImage" accept="image/*">
+            <label>Size</label>
+            <input type="range" id="topSize" min="1" max="10" step="0.5" value="1">
+            <div class="value" id="topSizeValue">1</div>
+            <label>X Offset</label>
+            <input type="range" id="topOffsetX" min="-150" max="150" value="0">
+            <div class="value" id="topOffsetXValue">0</div>
+            <label>Y Offset</label>
+            <input type="range" id="topOffsetY" min="-150" max="150" value="0">
+            <div class="value" id="topOffsetYValue">0</div>
+            <label>Rotation</label>
+            <input type="range" id="topRotation" min="0" max="360" value="0">
+            <div class="value" id="topRotationValue">0</div>
+            <label>Brightness</label>
+            <input type="range" id="topBrightness" min="0.2" max="3" step="0.025" value="1">
+            <div class="value" id="topBrightnessValue">1</div>
+        </div>
+        
+        <div class="control">
+            <label>Left Face</label>
+            <input type="file" id="leftImage" accept="image/*">
+            <label>Size</label>
+            <input type="range" id="leftSize" min="1" max="10" step="0.5" value="1">
+            <div class="value" id="leftSizeValue">1</div>
+            <label>X Offset</label>
+            <input type="range" id="leftOffsetX" min="-150" max="150" value="0">
+            <div class="value" id="leftOffsetXValue">0</div>
+            <label>Y Offset</label>
+            <input type="range" id="leftOffsetY" min="-150" max="150" value="0">
+            <div class="value" id="leftOffsetYValue">0</div>
+            <label>Rotation</label>
+            <input type="range" id="leftRotation" min="0" max="360" value="0">
+            <div class="value" id="leftRotationValue">0</div>
+            <label>Brightness</label>
+            <input type="range" id="leftBrightness" min="0.2" max="3" step="0.025" value="1">
+            <div class="value" id="leftBrightnessValue">1</div>
+        </div>
+        
+        <div class="control">
+            <label>Right Face</label>
+            <input type="file" id="rightImage" accept="image/*">
+            <label>Size</label>
+            <input type="range" id="rightSize" min="1" max="10" step="0.5" value="1">
+            <div class="value" id="rightSizeValue">1</div>
+            <label>X Offset</label>
+            <input type="range" id="rightOffsetX" min="-150" max="150" value="0">
+            <div class="value" id="rightOffsetXValue">0</div>
+            <label>Y Offset</label>
+            <input type="range" id="rightOffsetY" min="-150" max="150" value="0">
+            <div class="value" id="rightOffsetYValue">0</div>
+            <label>Rotation</label>
+            <input type="range" id="rightRotation" min="0" max="360" value="0">
+            <div class="value" id="rightRotationValue">0</div>
+            <label>Brightness</label>
+            <input type="range" id="rightBrightness" min="0.2" max="3" step="0.025" value="1">
+            <div class="value" id="rightBrightnessValue">1</div>
+        </div>
+        
+        <button onclick="resetAll()">Reset</button>
+        <button onclick="exportImage()">Export PNG</button>
+    </div>
+    
+    <div id="container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        var scene, camera, renderer, cube, wireframe;
+        var materials = [];
+        var images = { top: null, left: null, right: null };
+        var scaleFactor = 1;
+        var baseCanvasSize = 500;
+        var baseCameraSize = 1.5;
+        var baseCubeSize = 1;
+        
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = null;
+            
+            updateScale();
+            setupControls();
+            render();
+        }
+        
+        function updateScale() {
+            scaleFactor = parseFloat(document.getElementById('lineQuality').value);
+            
+            if (renderer) {
+                document.getElementById('container').removeChild(renderer.domElement);
+            }
+            
+            var cameraSize = baseCameraSize * scaleFactor;
+            camera = new THREE.OrthographicCamera(-cameraSize, cameraSize, cameraSize, -cameraSize, 1, 1000);
+            camera.position.set(3, 3, 3);
+            camera.lookAt(0, 0, 0);
+            
+            var canvasSize = baseCanvasSize * scaleFactor;
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true, 
+                preserveDrawingBuffer: true,
+                alpha: true 
+            });
+            renderer.setClearColor(0x000000, 0);
+            renderer.setSize(canvasSize, canvasSize);
+            renderer.domElement.style.width = baseCanvasSize + 'px';
+            renderer.domElement.style.height = baseCanvasSize + 'px';
+            document.getElementById('container').appendChild(renderer.domElement);
+            
+            if (scene.children.length > 0) {
+                scene.clear();
+            }
+            createCube();
+            
+            ['top', 'left', 'right'].forEach(function(face) {
+                if (images[face]) {
+                    updateFace(face, images[face]);
+                }
+            });
+            updateWireframe();
+        }
+        
+        function createCube() {
+            var cubeSize = baseCubeSize * scaleFactor;
+            var geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+            
+            materials = [];
+            for (var i = 0; i < 6; i++) {
+                materials[i] = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            }
+            
+            cube = new THREE.Mesh(geometry, materials);
+            scene.add(cube);
+            
+            var wireframeGeometry = new THREE.EdgesGeometry(geometry);
+            var wireframeMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 });
+            wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
+            scene.add(wireframe);
+        }
+        
+        function updateFace(face, image) {
+            var canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 256;
+            var ctx = canvas.getContext('2d');
+            
+            var size = parseFloat(document.getElementById(face + 'Size').value);
+            var offsetX = size*parseFloat(document.getElementById(face + 'OffsetX').value);
+            var offsetY = size*parseFloat(document.getElementById(face + 'OffsetY').value);
+            var rotation = parseFloat(document.getElementById(face + 'Rotation').value) * Math.PI / 180;
+            var brightness = parseFloat(document.getElementById(face + 'Brightness').value);
+            
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, 256, 256);
+            
+            if (image) {
+                ctx.save();
+                ctx.filter = 'brightness(' + brightness + ')';
+                ctx.translate(128 + offsetX, 128 + offsetY);
+                ctx.rotate(rotation);
+                ctx.scale(size, size);
+                ctx.drawImage(image, -128, -128, 256, 256);
+                ctx.restore();
+            }
+            
+            var texture = new THREE.CanvasTexture(canvas);
+            
+            var faceIndex;
+            if (face === 'top') faceIndex = 2;
+            else if (face === 'left') faceIndex = 4;
+            else if (face === 'right') faceIndex = 0;
+            
+            materials[faceIndex].map = texture;
+            materials[faceIndex].needsUpdate = true;
+            render();
+        }
+        
+        function loadImage(face, file) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var img = new Image();
+                img.onload = function() {
+                    images[face] = img;
+                    updateFace(face, img);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function updateWireframe() {
+            var width = parseFloat(document.getElementById('edgeWidth').value);
+            var color = document.getElementById('edgeColor').value;
+            
+            wireframe.material.linewidth = width;
+            wireframe.material.color.setHex(parseInt(color.replace('#', '0x')));
+            wireframe.visible = width > 0;
+            render();
+        }
+        
+        function setupControls() {
+            document.getElementById('lineQuality').addEventListener('change', updateScale);
+            
+            var controls = ['edgeWidth', 'topSize', 'topOffsetX', 'topOffsetY', 'topRotation', 'topBrightness',
+                           'leftSize', 'leftOffsetX', 'leftOffsetY', 'leftRotation', 'leftBrightness',
+                           'rightSize', 'rightOffsetX', 'rightOffsetY', 'rightRotation', 'rightBrightness'];
+            
+            controls.forEach(function(id) {
+                var element = document.getElementById(id);
+                var valueElement = document.getElementById(id + 'Value');
+                
+                element.addEventListener('input', function() {
+                    valueElement.textContent = element.value;
+                    
+                    if (id === 'edgeWidth') {
+                        updateWireframe();
+                    } else {
+                        var face = id.startsWith('top') ? 'top' : id.startsWith('left') ? 'left' : id.startsWith('right') ? 'right' : null;
+                        if (face && images[face]) {
+                            updateFace(face, images[face]);
+                        }
+                    }
+                });
+            });
+
+            document.getElementById('edgeColor').addEventListener('input', function() {
+                updateWireframe();
+            });
+            
+            document.getElementById('topImage').addEventListener('change', function(e) {
+                if (e.target.files[0]) loadImage('top', e.target.files[0]);
+            });
+            
+            document.getElementById('leftImage').addEventListener('change', function(e) {
+                if (e.target.files[0]) loadImage('left', e.target.files[0]);
+            });
+            
+            document.getElementById('rightImage').addEventListener('change', function(e) {
+                if (e.target.files[0]) loadImage('right', e.target.files[0]);
+            });
+        }
+        
+        function render() {
+            renderer.render(scene, camera);
+        }
+        
+        function resetAll() {
+            var controls = ['edgeWidth', 'topSize', 'topOffsetX', 'topOffsetY', 'topRotation', 'topBrightness',
+                           'leftSize', 'leftOffsetX', 'leftOffsetY', 'leftRotation', 'leftBrightness',
+                           'rightSize', 'rightOffsetX', 'rightOffsetY', 'rightRotation', 'rightBrightness'];
+            
+            controls.forEach(function(id) {
+                var element = document.getElementById(id);
+                var valueElement = document.getElementById(id + 'Value');
+                
+                if (id === 'edgeWidth') element.value = '1';
+                else if (id.includes('Size')) element.value = '1';
+                else if (id.includes('Brightness')) element.value = '1';
+                else element.value = '0';
+                
+                valueElement.textContent = element.value;
+            });
+            
+            document.getElementById('lineQuality').value = '1';
+            
+            images = { top: null, left: null, right: null };
+            document.getElementById('topImage').value = '';
+            document.getElementById('leftImage').value = '';
+            document.getElementById('rightImage').value = '';
+            
+            updateScale();
+        }
+        
+        function exportImage() {
+            var cameraWidth = baseCameraSize * 2 * scaleFactor;
+            var canvasWidth = baseCanvasSize * scaleFactor;
+            var cubeEdge = baseCubeSize * scaleFactor;
+            var pixelsPerUnit = canvasWidth / cameraWidth;
+            var cubePixelWidth = Math.sqrt(2) * cubeEdge * pixelsPerUnit;
+            var cubePixelHeight = Math.sqrt(3) * cubeEdge * pixelsPerUnit;
+            
+            var cropWidth = Math.round(cubePixelWidth);
+            var cropHeight = Math.round(cubePixelHeight);
+            var cropX = Math.round((canvasWidth - cropWidth) / 2);
+            var cropY = Math.round((canvasWidth - cropHeight) / 2);
+            
+            var cropCanvas = document.createElement('canvas');
+            cropCanvas.width = cropWidth;
+            cropCanvas.height = cropHeight;
+            var cropCtx = cropCanvas.getContext('2d');
+            
+            cropCtx.drawImage(renderer.domElement, 
+                cropX, cropY, cropWidth, cropHeight,
+                0, 0, cropWidth, cropHeight
+            );
+            
+            var finalCanvas = document.createElement('canvas');
+            var finalWidth = Math.round(cropWidth / scaleFactor);
+            var finalHeight = Math.round(cropHeight / scaleFactor);
+            finalCanvas.width = finalWidth;
+            finalCanvas.height = finalHeight;
+            var finalCtx = finalCanvas.getContext('2d');
+            
+            finalCtx.drawImage(cropCanvas, 0, 0, finalWidth, finalHeight);
+            
+            var link = document.createElement('a');
+            link.download = 'isometric-cube.png';
+            link.href = finalCanvas.toDataURL();
+            link.click();
+        }
+        
+        init();
+    </script>
+</body>
+</html>

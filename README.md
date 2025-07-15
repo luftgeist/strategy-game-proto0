@@ -24,3 +24,5 @@
 - assets not included
 - for now most config happens in config.js, but also look into people.js, resources.js, terrain.js
 - file names are currently hard coded, and as such one needs to provide appropriatly named files in assets, web console is our friend and will complain until we've named all files correclty ;)
+- currently generate assets via ai image models
+- for tiling block assets: as even top-notch ai tools are really bad at drawing perfect isometric proportions while also making all faces the same texture, I added a little helper tile-generator

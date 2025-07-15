@@ -30,7 +30,7 @@ export const FEMALE_NAMES = [
     "Dalia"
 ];
 
-const img_male = loadImg('people_male_young.png')
+const img_male = loadImg('p/people_male_young.png')
 
 
 export class Person {

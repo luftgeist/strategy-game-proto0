@@ -2,7 +2,7 @@ export function loadImg(src){
     const img = new Image(); img.src = `/assets/i/${src}`;
 
     img.loaded = new Promise((resolve, reject) => {
-        img.onload = () => resolve(img);
+        img.onload = () => resolve(createImageBitmap(img));
         img.onerror = (e) => reject(new Error(`Failed to load image: ${img.src}`));
     });
     
