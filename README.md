@@ -14,6 +14,8 @@
 
 ## Current Features
 - simple procedural terrain generation
+- map tiling
+- spatial labeled property graphs for more complex social behaviour - behaviour not yet implemeted
 - placing buildings
 - map panning and zooming
 - multi-step production chains
