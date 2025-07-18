@@ -1,9 +1,9 @@
 // Game class for handling game logic and state
-import { Graph, Edge } from './graph.js';
+import { SpatialLabeledGraph, LabeledEdge, findVertexAtPosition, findEdgeAtPosition } from './graph.js';
 import { drawTerrain, drawMapObjects, initTerrain } from './terrain.js';
 import { 
     createBuildingVertex, drawBuildings, 
-    findVertexAtPosition, findEdgeAtPosition, handleBuildingPlacement, 
+    handleBuildingPlacement, 
     handlePathPlacement
 } from './buildings.js';
 import { payTax,  updateResourceMenu } from './resources.js';
@@ -12,7 +12,7 @@ import {
     updateModeIndicator, createSaveLoadUI, createBuildingMenuCategories, addSoundToAllButtons,
     setMessage, registerSpeedChangeButton,
 } from './ui.js';
-import { drawPeople, findPersonAtPosition } from './person.js';
+import { drawPeople } from './person.js';
 import { AudioManager } from './audio-manager.js';
 
 // Visibility API helper
@@ -37,7 +37,7 @@ export class Game {
         
         // Game state
         this.state = {
-            buildingGraph: new Graph([], []), // Graph to store building vertices
+            graph: new SpatialLabeledGraph({vertex_labels: {people: [], buildings: []}, edge_labels: {rels: [], buildings: []}}, {cellSize: 100}), // Graph to store building vertices
 
             viewportX: 0,         // Current viewport position X
             viewportY: 0,         // Current viewport position Y
@@ -65,7 +65,6 @@ export class Game {
             waterLevel: 0,
             map_trees: [],
             map_wildlife: [],
-            people: new Map(),           // Array of Person objects
 
             audio: new AudioManager(), // handles Audio
 
@@ -158,11 +157,11 @@ export class Game {
             document.addEventListener(visibilityChange, this.handleVisibilityChange, false);
         }
         
-        // Add event listener for buildingGraph changes
-        //this.state.buildingGraph.addEventListener('graph-update', this.handleGraphChange);
-        this.state.buildingGraph.addEventListener('graph-add-vertex', this.handleGraphChange);
-        this.state.buildingGraph.addEventListener('graph-rem-vertex', this.handleGraphChange);
-        this.state.buildingGraph.addEventListener('graph-rem-edge', this.handleGraphChange);
+        // Add event listener for graph changes
+        //this.state.graph.addEventListener('graph-update', this.handleGraphChange);
+        this.state.graph.addEventListener('graph-add-vertex', this.handleGraphChange);
+        this.state.graph.addEventListener('graph-rem-vertex', this.handleGraphChange);
+        this.state.graph.addEventListener('graph-rem-edge', this.handleGraphChange);
 
         addSoundToAllButtons(this.state);
         registerSpeedChangeButton(this.state, this.config);
@@ -209,13 +208,12 @@ export class Game {
         )
 
 
-        this.state.buildingGraph.addVertex(this.state.townsquare);
-        this.state.buildingGraph.addVertex(this.state.storehouse);
-        this.state.buildingGraph.addVertex(this.state.palace);
+        this.state.graph.addVertex(this.state.townsquare);
+        this.state.graph.addVertex(this.state.storehouse);
+        this.state.graph.addVertex(this.state.palace);
 
-        this.state.buildingGraph.addEdge(new Edge(this.state.palace, this.state.townsquare, 'road', 0, null));
-        this.state.buildingGraph.addEdge(new Edge(this.state.storehouse, this.state.townsquare, 'road', 0, null));
-
+        this.state.graph.addEdge(new LabeledEdge({_v0: this.state.palace.id, _v1: this.state.townsquare.id, type: 'road', label: 'buildings'}));
+        this.state.graph.addEdge(new LabeledEdge({_v0: this.state.storehouse.id, _v1: this.state.townsquare.id, type: 'road', label: 'buildings'}));
         
         // Start animation loop
         this.state.lastFrameTime = performance.now();
@@ -233,10 +231,6 @@ export class Game {
     
     // Handle changes to the building graph (new roads or buildings)
     handleGraphChange(e) {
-        // If a vertex is added, check if it's a storehouse
-        if (e.type === 'graph-add-vertex') {
-            const vertex = e.detail;
-        }
         
         // If an edge or vertex is removed, recalculate paths
         if (e.type === 'graph-rem-edge' || e.type === 'graph-rem-vertex') {
@@ -257,28 +251,29 @@ export class Game {
     handleVertexRemoval(vertex) {
         // Check if any people are associated with this vertex
         
-        this.state.people.forEach((person)=>{
-            
+        for (let vid of this.state.graph.V.people){
+            const person = this.state.graph.vertices[vid];
+
             // If this was the person's home, mark their home as null
-            if (person.home === vertex) {
+            if (person.data.home === vertex) {
                 console.warn(`Person's home was removed: ${person.id}`);
                 person.looseHome();
             }
             
             // If this was the person's workplace, make them quit the job
-            if (person.workplace === vertex) {
+            if (person.data.workplace === vertex) {
                 console.warn(`Person's workplace was removed: ${person.id}`);
                 person.looseWork();
             }
             
             // If vertex was in their path, reset path
-        })
+        }
         
         // Update UI after people changes
         updateResourceMenu();
         
         // If selected person was removed, clear selection
-        if (this.state.selectedPerson && !this.state.people.get(this.state.selectedPerson.id)) {
+        if (this.state.selectedPerson && !this.state.graph.vertices[this.state.selectedPerson.id]) {
             this.state.selectedPerson = null;
             hideSelectionMenu();
         }
@@ -308,7 +303,8 @@ export class Game {
         // Update all people
         this.state.peopleNeedRedraw = false;
         this.state.buildingsNeedRedraw = true;
-        this.state.people.forEach((person)=>{
+        for (let pid of this.state.graph.V.people){
+            const person = this.state.graph.vertices[pid];
             try {
                 const oldX = person.x;
                 const oldY = person.y;
@@ -321,14 +317,14 @@ export class Game {
                 person.x = Math.max(0, Math.min(person.x, this.config.mapWidth));
                 person.y = Math.max(0, Math.min(person.y, this.config.mapHeight));
                 
-                if (person.x !== oldX || person.y !== oldY || person.state !== oldState || person.onRoad !== oldRoad) {
+                if (person.x !== oldX || person.y !== oldY || person.state !== oldState || person.data.onRoad !== oldRoad) {
                     this.state.peopleNeedRedraw = true;
                 }
             } catch (error) {
                 console.error("Error updating person:", error, person);
                 this.state.peopleNeedRedraw = true;
             }
-        });
+        };
         
         // Update resource display frequently to ensure real-time feedback
         if (timestamp % 500 < 16) {
@@ -361,7 +357,7 @@ export class Game {
         
         // Draw people on the same canvas, after buildings
         drawPeople();
-
+        
         drawBuildings(false,time);
 
         drawMapObjects(time)
@@ -407,9 +403,14 @@ export class Game {
         }
         
         // Check if a building of the same type already exists
-        const exists = Array.from(this.state.buildingGraph.vertices.values()).some(
-            vertex => vertex.type === typeKey
-        );
+        let exists = false;
+        for (let vid of this.state.graph.V.buildings){
+            let vertex = this.state.graph.vertices[vid];
+            if (vertex.type === typeKey){
+                exists = true;
+                break;
+            }
+        };
         
         return !exists;
     }
@@ -542,7 +543,7 @@ export class Game {
             // Handle road building (edge mode)
             if (buildingType.buildingMode === 'path') {
                 // Find if we clicked on a building
-                handlePathPlacement(this.state, mapX, mapY, this.config, buildingType);
+                handlePathPlacement(mapX, mapY, buildingType);
             }
             // Handle regular building placement
             else {
@@ -550,8 +551,8 @@ export class Game {
             }
         } else { // Selection mode
             // First check if we clicked on a person
-            const clickedPerson = findPersonAtPosition(
-                this.state.people,
+            const clickedPerson = findVertexAtPosition(
+                'people',
                 mapX,
                 mapY
             );
@@ -564,10 +565,9 @@ export class Game {
             
             // Then check if we clicked on a road (edge)
             const clickedEdge = findEdgeAtPosition(
-                this.state.buildingGraph,
                 mapX,
                 mapY,
-                this.state.zoom
+                'buildings',
             );
             
             if (clickedEdge) {
@@ -577,7 +577,7 @@ export class Game {
             
             // If not a person or a road, check for building
             const clickedVertex = findVertexAtPosition(
-                this.state.buildingGraph, 
+                "buildings", 
                 mapX, 
                 mapY
             );

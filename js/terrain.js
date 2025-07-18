@@ -212,6 +212,9 @@ export function scaleTerrain(terrain, scaleFactor = 2){
     const new_width = terrain[0].length * scaleFactor;
     const new_height = terrain.length * scaleFactor;
 
+    let counter = 0;
+    const maxCounter = scaleFactor*scaleFactor;
+
     for (let y = 0; y < new_height; y++) {
         // Initialize the terrain array with the correct dimensions
         new_terrain[y] = new Array(new_width).fill(0);
@@ -219,30 +222,35 @@ export function scaleTerrain(terrain, scaleFactor = 2){
             // Find the corresponding source pixel
             const sourceX = Math.floor(x / scaleFactor);
             const sourceY = Math.floor(y / scaleFactor);
+
+            if (counter >= maxCounter){
+                counter = 0;
+            }
+            
             
             const [height, data1, data2] = terrain[sourceY][sourceX];
 
             const alpha = Math.floor(255*random.next());
             
-            new_terrain[y][x] = [height, alpha, data1, data2];
+            new_terrain[y][x] = [height, alpha, data1, data2, counter];
 
             if (x % scaleFactor === 0 && terrain[sourceY][sourceX-1]){
                 const [_h] = terrain[sourceY][sourceX-1]
-                new_terrain[y][x] = [(_h+height)/2, alpha, data1, data2]
+                new_terrain[y][x] = [(_h+height)/2, alpha, data1, data2, counter]
             }
             if (x % scaleFactor === scaleFactor-1 && terrain[sourceY][sourceX+1]){
                 const [_h] = terrain[sourceY][sourceX+1]
-                new_terrain[y][x] = [(_h+height)/2, alpha, data1, data2]
+                new_terrain[y][x] = [(_h+height)/2, alpha, data1, data2, counter]
             }
             if (y % scaleFactor === 0 && terrain[sourceY-1]){
                 const [_h] = terrain[sourceY-1][sourceX]
-                new_terrain[y][x] = [(_h+height)/2, alpha, data1, data2]
+                new_terrain[y][x] = [(_h+height)/2, alpha, data1, data2, counter]
             }
             if (y % scaleFactor === scaleFactor-1 && terrain[sourceY+1]){
                 const [_h] = terrain[sourceY+1][sourceX]
-                new_terrain[y][x] = [(_h+height)/2, alpha, data1, data2]
+                new_terrain[y][x] = [(_h+height)/2, alpha, data1, data2, counter]
             }
-
+            counter++;
         }
     }
     

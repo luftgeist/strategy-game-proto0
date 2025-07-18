@@ -89,8 +89,10 @@ export function updateResourceMenu() {
     
     const resources = gameInstance.state.storehouse.data.storage;
     const lastResourceChanges = gameInstance.state.storehouse.data.lastChanges;
-    const people = Array.from(gameInstance.state.people.values());
-
+    const people = [];
+    for (let pid of gameInstance.state.graph.V.people){
+        people.push(gameInstance.state.graph.vertices[pid]);
+    }
     const resourceContent = document.getElementById('resource-content');
     
     //resourceMenu.style.display = 'block';

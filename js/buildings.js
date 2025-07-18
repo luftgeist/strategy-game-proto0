@@ -1,7 +1,6 @@
 // Building-related functions and utilities
-import { Vertex, Edge } from './graph.js';
+import { SpatialLabeledVertex, LabeledEdge, handleVertexOnPathPlacement, findVertexAtPosition } from './graph.js';
 import { canStorehouseProvide, storehouseWithdraw, updateResourceMenu } from './resources.js';
-import { handleVertexOnPathPlacement } from './graph-utils.js';
 import { getTerrainTypeAtPosition } from './terrain.js';
 import { setMessage, showSelectionMenu, updateBuildingSelector } from './ui.js';
 
@@ -33,13 +32,14 @@ export async function createBuildingVertex(type, x, y, buildingTypes) {
         });
     }
     
-    // Create a new vertex with building data - use the type directly
-    let vertex = new Vertex(
+    let vertex = new SpatialLabeledVertex({
         x, // Center the building at the click point
         y,
         type, // Use the type directly instead of converting name
-        data
-    );
+        data,
+        vlabels: ['buildings',],
+        elabels: ['buildings'],
+    });
 
     if (vertex.data.buildstate !== 0) {
         vertex.data.buildingprogress = 0;
@@ -56,7 +56,7 @@ export async function createBuildingVertex(type, x, y, buildingTypes) {
 export function drawBuildings(drawBottom = false, time) {
 
     const buildingCtx = gameInstance.buildingCtx;
-    const buildingGraph = gameInstance.state.buildingGraph;
+    const graph = gameInstance.state.graph;
     const viewportX = gameInstance.state.viewportX;
     const viewportY = gameInstance.state.viewportY;
     const zoom = gameInstance.state.zoom;
@@ -71,10 +71,11 @@ export function drawBuildings(drawBottom = false, time) {
     const endY = startY + config.viewportHeight / zoom;
     
     // First draw all edges (including roads)
-    buildingGraph.edges.values().forEach(edge => {
+    for (let eid of graph.E['buildings']) {
+        let edge = graph.edges[eid];
         const buildingType = config.buildingTypes[edge.type];
         if (buildingType.drawBottom !== drawBottom) {
-            return;
+            continue;
         }
         // Get the vertices connected by edge
         const v0 = edge.v0;
@@ -116,13 +117,14 @@ export function drawBuildings(drawBottom = false, time) {
             buildingCtx.lineTo(screenV1X, screenV1Y);
             buildingCtx.stroke();
         } 
-    });
+    };
     
     // Then draw all vertices (buildings)
-    buildingGraph.vertices.values().forEach(vertex => {
+    for (let vid of graph.V.buildings) {
+        let vertex = graph.vertices[vid];
         const buildingType = config.buildingTypes[vertex.type];
         if (!!buildingType.drawBottom !== drawBottom) {
-            return;
+            continue;
         }
         const x = vertex.x;
         const y = vertex.y;
@@ -178,80 +180,11 @@ export function drawBuildings(drawBottom = false, time) {
 
             buildingType.render(buildingCtx, viewX, viewY, scaledWidth, scaledHeight, zoom, vertex, buildingType.img);
         }
-    });
-}
-
-// Find a vertex (building) at the given map position
-export function findVertexAtPosition(buildingGraph, mapX, mapY) {
-    for (const vertex of buildingGraph.vertices.values()) {
-        const x = vertex.x;
-        const y = vertex.y;
-        const width = vertex.data.width;
-        const height = vertex.data.height;
-        
-        if (
-            mapX >= x-width/2 && 
-            mapX <= x + width/2 && 
-            mapY >= y-width/2 && 
-            mapY <= y + height/2
-        ) {
-            return vertex;
-        }
-    }
-    return null;
-}
-
-// Find an edge (road) at the given map position
-export function findEdgeAtPosition(buildingGraph, mapX, mapY, zoom) {
-    // Define the hit detection threshold (how close the cursor needs to be to the road)
-    const hitThreshold = 10 / zoom; // Adjust based on zoom level
-    
-    for (const edge of buildingGraph.edges.values()) {
-        if (edge.type === 'road') {
-            // Calculate center points of the connected buildings
-            const v0 = edge.v0;
-            const v1 = edge.v1;
-            
-            // Calculate distance from point to line segment (the road)
-            // Formula: d = |CrossProduct(AB, AP)| / |AB|
-            const ax = v0.x; 
-            const ay = v0.y;
-            const bx = v1.x;
-            const by = v1.y;
-            
-            // Calculate length of line AB
-            const abLength = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
-            
-            // Calculate cross product of AB and AP
-            const crossProduct = Math.abs((bx - ax) * (mapY - ay) - (by - ay) * (mapX - ax));
-            
-            // Calculate distance from point to line
-            const distance = crossProduct / abLength;
-            
-            // Check if the point is close enough to the line
-            if (distance <= hitThreshold) {
-                // Make sure the point is actually near the line segment, not the extended line
-                // Project the point onto the line
-                const t = ((mapX - ax) * (bx - ax) + (mapY - ay) * (by - ay)) / (abLength * abLength);
-                
-                // Check if the projection is on the line segment
-                if (t >= 0 && t <= 1) {
-                    return edge;
-                }
-            }
-        }
-    }
-    
-    return null;
-}
-
-// Calculate distance between two points
-export function calculateDistance(x1, y1, x2, y2) {
-    return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+    };
 }
 
 // Check if placement conditions for building mode are met
-export function canPlaceBuilding(buildingTypeKey, x, y, buildingTypes, buildingGraph, terrain, mapWidth, mapHeight, map_trees, waterLevel = 0) {
+export function canPlaceBuilding(buildingTypeKey, x, y, buildingTypes, graph, terrain, mapWidth, mapHeight, map_trees, waterLevel = 0) {
     const buildingType = buildingTypes[buildingTypeKey];
     
     if (buildingType.name === 'road') {
@@ -301,22 +234,10 @@ export function canPlaceBuilding(buildingTypeKey, x, y, buildingTypes, buildingG
             return false;
         }
     } else if (buildingType.buildingMode === 'near') {
-        let nearbyBuildingFound = false;
-        
-        for (const vertex of buildingGraph.vertices.values()) {
-            if (vertex.type === buildingType.nearType) {
-                
-                const distance = calculateDistance(x, y, vertex.x, vertex.y);
-                
-                if (distance <= buildingType.epsilon) {
-                    nearbyBuildingFound = true;
-                    break;
-                }
-            }
-        }
+        const nearbyBuildingFound = findVertexAtPosition('buildings', x, y, buildingType.epsilon);
         
         if (!nearbyBuildingFound) {
-            console.log(`Building must be placed within ${buildingType.epsilon} units of a ${buildingType.nearType}.`);
+            setMessage(`Building must be placed within ${buildingType.epsilon} units of a ${buildingType.nearType}.`);
             return false;
         }
     }
@@ -324,21 +245,23 @@ export function canPlaceBuilding(buildingTypeKey, x, y, buildingTypes, buildingG
     return true;
 }
 
-export async function handlePathPlacement(state, mapX, mapY, config, buildingType ){
+export async function handlePathPlacement(mapX, mapY, buildingType ){
+    const state = gameInstance.state;
+
     let clickedVertex = findVertexAtPosition(
-        state.buildingGraph, 
+        'buildings', 
         mapX, 
         mapY
     ); 
     let newVertex;
     if (!clickedVertex) {
-        newVertex = await createBuildingVertex(buildingType.name, mapX, mapY, config.buildingTypes);
-        clickedVertex = handleVertexOnPathPlacement(state.buildingGraph, newVertex, buildingType.name ,15)
+        newVertex = await createBuildingVertex(buildingType.name, mapX, mapY, gameInstance.config.buildingTypes);
+        clickedVertex = handleVertexOnPathPlacement('buildings', newVertex, buildingType.name ,15)
     }
     
     if (!clickedVertex){
         clickedVertex = newVertex;
-        state.buildingGraph.addVertex(clickedVertex);
+        state.graph.addVertex(clickedVertex, ['buildings']);
     }    
     if (!state.roadStartVertex) {
         state.roadStartVertex = clickedVertex;
@@ -351,10 +274,10 @@ export async function handlePathPlacement(state, mapX, mapY, config, buildingTyp
         if (canStorehouseProvide(roadCost)) {
             storehouseWithdraw(roadCost);
             
-            const newEdge = new Edge(state.roadStartVertex, clickedVertex, buildingType.name, 0, null);
+            const newEdge = new LabeledEdge({_v0: state.roadStartVertex.id, _v1: clickedVertex.id, type: buildingType.name});
             newEdge.data = { ...buildingType.data }
             
-            state.buildingGraph.addEdge(newEdge);
+            state.graph.addEdge(newEdge, 'buildings');
             
             // Reset road building state
             state.roadStartVertex = clickedVertex;
@@ -390,7 +313,7 @@ export async function handleBuildingPlacement(mapX, mapY){
             mapX, 
             mapY, 
             config.buildingTypes, 
-            state.buildingGraph, 
+            state.graph, 
             state.terrain, 
             config.mapWidth, 
             config.mapHeight,
@@ -404,7 +327,7 @@ export async function handleBuildingPlacement(mapX, mapY){
                 config.buildingTypes
             );
             
-            state.buildingGraph.addVertex(newVertex);
+            state.graph.addVertex(newVertex, ['buildings']);
 
             storehouseWithdraw(buildingType.res)
             

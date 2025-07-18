@@ -73,7 +73,7 @@ const config = {
             init(vertex){
                 const person = new Person(gameInstance.state.storehouse);
                 person.assignToHome(vertex);
-                gameInstance.state.people.set(person.id,person);
+                gameInstance.state.graph.addVertex(person, ['people']);
             },
             onselect: function(vertex, selectionMenu, content) {
                 content.innerHTML = `
@@ -85,30 +85,31 @@ const config = {
                 document.getElementById('delete-building').addEventListener('click', () => {
                     if (vertex.data.residents.length > 0) {
                         for (let resident of vertex.data.residents){
-                            for (let peop of window.gameInstance.state.people){
-                                if (resident === peop.id && peop.home && peop.home.id === vertex.id){
+                            for (let pid of window.gameInstance.state.graph.V.people){
+                                const peop = window.gameInstance.state.graph.vertices[pid];
+                                if (resident === peop.id && peop.data.home && peop.data.home.id === vertex.id){
                                     peop.looseHome();
                                 }
                             }
                         }
                     }
                     storehouseDeposit(this.res);
-                    window.gameInstance.state.buildingGraph.removeVertex(vertex);
+                    window.gameInstance.state.graph.removeVertex(vertex.id);
                     window.gameInstance.hideSelectionMenu();
                     window.gameInstance.redraw();
                 });
             },
             work: function(deltaTime, person) {
-                const here = person.currentPath[0];
-                if (checkBuilding(here)){
+                const here = person.data.currentPath[0];
+                if (checkBuilding(here, person)){
                     return null;
                 }
-                person.actiontext = 'sleeping';
+                person.data.actiontext = 'sleeping';
                 console.log('sleeping now')
                 let newTarget = null;
-                if (person.workplace) {
-                    person.actiontext = 'going to work'
-                    newTarget = person.workplace;
+                if (person.data.workplace) {
+                    person.data.actiontext = 'going to work'
+                    newTarget = person.data.workplace;
                 }
                 return newTarget;
             },
@@ -144,7 +145,7 @@ const config = {
             },
             onselect: function(vertex, selectionMenu, content) {
                 content.innerHTML = `
-                    <div>${this.name}</div>
+                    <div>${this.data.name}</div>
                     <div>Active: ${vertex.data.active ? 'Yes' : 'No'}</div>
                     <div>Workers: ${vertex.data.workers.length}/${vertex.data.maxWorkers}</div>
                     <div>Tree Radius: ${vertex.data.treeradius}</div>
@@ -175,21 +176,21 @@ const config = {
                 });
 
                 document.getElementById('delete-building').addEventListener('click', () => {
-                    window.gameInstance.state.buildingGraph.removeVertex(vertex);
+                    window.gameInstance.state.graph.removeVertex(vertex.id);
                     storehouseDeposit(this.res);
                     window.gameInstance.hideSelectionMenu();
                     window.gameInstance.redraw();
                 });
             },
             work: function(deltaTime, person) {
-                const here = person.currentPath[0];
-                if (checkBuilding(here)){
+                const here = person.data.currentPath[0];
+                if (checkBuilding(here, person)){
                     return null;
                 }
-                const workplace = person.workplace;
+                const workplace = person.data.workplace;
                 if (!workplace.data.active) {
-                    person.actiontext = 'returning home'
-                    return person.home;
+                    person.data.actiontext = 'returning home'
+                    return person.data.home;
                 }
                 let i = 0;
                 if (!workplace.data.currenttree){
@@ -205,19 +206,19 @@ const config = {
                 }
                 if (!workplace.data.currenttree){
                     setMessage("A forestry is without a forest");
-                    person.actiontext = 'returning home';
-                    return person.home;
+                    person.data.actiontext = 'returning home';
+                    return person.data.home;
                 } else if (storehouseHasCapacity({wood: 3})){
                     workplace.data.currenttree.h-=1;
                     if (workplace.data.currenttree.h < 1){
                         workplace.data.currenttree = null;
                     }
-                    person.inventory['wood'] = 3;
-                    person.actiontext = 'bring wood to storehouse';
+                    person.data.inventory['wood'] = 3;
+                    person.data.actiontext = 'bring wood to storehouse';
                     return gameInstance.state.storehouse;
                 } else {
                     setMessage("the storehouse is full!", 'red')
-                    person.actiontext = 'waiting';
+                    person.data.actiontext = 'waiting';
                 }
             },
             render: function(ctx, x, y, width, height, zoom, vertex, img) {
@@ -265,7 +266,7 @@ const config = {
             },
             onselect: function(vertex, selectionMenu, content) {
                 content.innerHTML = `
-                    <div>${this.name}</div>
+                    <div>${this.data.name}</div>
                     <div>Active: ${vertex.data.active ? 'Yes' : 'No'}</div>
                     <div>Workers: ${vertex.data.workers.length}/${vertex.data.maxWorkers}</div>
                     <button id="toggle-active">Toggle Active</button>
@@ -278,7 +279,7 @@ const config = {
                 });
                 
                 document.getElementById('delete-building').addEventListener('click', () => {
-                    window.gameInstance.state.buildingGraph.removeVertex(vertex);
+                    window.gameInstance.state.graph.removeVertex(vertex.id);
                     storehouseDeposit(this.res);
                     window.gameInstance.hideSelectionMenu();
                     window.gameInstance.redraw();
@@ -335,7 +336,7 @@ const config = {
                 
                 // Add event listeners for buttons
                 document.getElementById('delete-road').addEventListener('click', () => {
-                    window.gameInstance.state.buildingGraph.removeEdge(edge);
+                    window.gameInstance.state.graph.removeEdge(edge.id);
                     window.gameInstance.hideSelectionMenu();
                     window.gameInstance.redraw();
                 });
@@ -396,8 +397,8 @@ const config = {
             unique: true, // Only one can be built in the game
             data: {
                 storage: {
-                    water: 50,
-                    wood: 50,
+                    water: 20,
+                    wood: 20,
                     stone: 20,
                     iron: 0,
                     grains: 0,
@@ -428,10 +429,10 @@ const config = {
             },
             work: function(deltaTime, person) {
                 let newTarget = null;
-                if (person.home){
-                    person.actiontext = 'returning home';
-                    storehouseDeposit(person.inventory)
-                    newTarget = person.home;
+                if (person.data.home){
+                    person.data.actiontext = 'returning home';
+                    storehouseDeposit(person.data.inventory)
+                    newTarget = person.data.home;
                 }
                 return newTarget;
             },
@@ -491,9 +492,9 @@ const config = {
     },
 };
 
-function checkBuilding(here){
+function checkBuilding(here, person){
     if (here.data.buildstate >= 0) return false;
-    person.actiontext = 'building';
+    person.data.actiontext = 'building';
     if (!here.data.buildingprogress) {
         const s = gameInstance.state.audio.createSpatialSource(
             'building', 

@@ -1,8 +1,7 @@
-// Pathfinding utilities for the game
-import { calculateDistance } from './buildings.js';
+import { distance, Distance } from "./graph.js";
 
 // Find the fastest path between two vertices, taking roads into account
-export function findFastestPath(startVertex, endVertex, buildingGraph) {
+export function findFastestPath(startVertex, endVertex, vlabels = [], elabel = '') {
     // Check if either vertex is null or undefined
     if (!startVertex || !endVertex) {
         throw new Error("Pathfinding error: null or undefined vertex provided");
@@ -26,11 +25,14 @@ export function findFastestPath(startVertex, endVertex, buildingGraph) {
     // Priority queue of vertices to visit, ordered by time to reach
     const queue = [];
     
-    // Initialize all vertices with infinite time
-    for (const vertex of buildingGraph.vertices.values()) {
-        if (vertex) { // Check for null vertices
-            times.set(vertex, Infinity);
-            previous.set(vertex, null);
+    // Initialize all vertices with infinite time WARN!!!
+    for (const vlabel of vlabels){
+        for (const vid of gameInstance.state.graph.V[vlabel]) {
+            const vertex = gameInstance.state.graph.vertices[vid];
+            if (vertex) { // Check for null vertices
+                times.set(vertex, Infinity);
+                previous.set(vertex, null);
+            }
         }
     }
     
@@ -58,7 +60,7 @@ export function findFastestPath(startVertex, endVertex, buildingGraph) {
         
         // Check all neighbors of current vertex
         try {
-            const neighbors = getNeighbors(current, buildingGraph);
+            const neighbors = getNeighbors(current, elabel);
             for (const { neighbor, isRoad, distance } of neighbors) {
                 // Skip if already visited or null
                 if (visited.has(neighbor) || !neighbor) {
@@ -100,7 +102,7 @@ export function findFastestPath(startVertex, endVertex, buildingGraph) {
 }
 
 // Get all neighboring vertices and their distances
-function getNeighbors(vertex, buildingGraph) {
+function getNeighbors(vertex, elabel) {
     // Check if vertex is null or undefined
     if (!vertex) {
         console.warn("Null vertex in getNeighbors");
@@ -109,16 +111,10 @@ function getNeighbors(vertex, buildingGraph) {
     
     const neighbors = [];
     
-    // Check if vertex.edges exists and is iterable
-    if (!vertex.edges || !vertex.edges.forEach) {
-        console.warn("Vertex has no valid edges property:", vertex);
-        return [];
-    }
-    
     // Check all edges from this vertex
-    for (const edge of vertex.edges) {
-        if (!edge || edge.type !== 'road') continue; // Skip null edges
-        const isRoad = true;
+    for (const eid of vertex.e[elabel]) {
+        const edge = gameInstance.state.graph.edges[eid];
+        if (!edge) continue; // Skip null edges
         
         const otherVertex = edge.getOtherVertex(vertex);
         if (!otherVertex) continue; // Skip if other vertex is null
@@ -129,11 +125,11 @@ function getNeighbors(vertex, buildingGraph) {
         const v2CenterX = otherVertex.x + otherVertex.data.width / 2;
         const v2CenterY = otherVertex.y + otherVertex.data.height / 2;
         
-        const distance = calculateDistance(v1CenterX, v1CenterY, v2CenterX, v2CenterY);
+        const distance = Distance(v1CenterX, v1CenterY, v2CenterX, v2CenterY);
         
         neighbors.push({
             neighbor: otherVertex,
-            isRoad: isRoad,
+            isRoad: edge.type === 'road',
             distance: distance
         });
     }
@@ -141,27 +137,13 @@ function getNeighbors(vertex, buildingGraph) {
     return neighbors;
 }
 
-// Calculate the direct walking distance between two vertices (center to center)
-export function calculateDirectDistance(vertex1, vertex2) {
-    // Check if either vertex is null
-    if (!vertex1 || !vertex2) {
-        console.warn("Null vertex in calculateDirectDistance");
-        return Infinity;
-    }
-    
-    const v1CenterX = vertex1.x + vertex1.data.width / 2;
-    const v1CenterY = vertex1.y + vertex1.data.height / 2;
-    const v2CenterX = vertex2.x + vertex2.data.width / 2;
-    const v2CenterY = vertex2.y + vertex2.data.height / 2;
-    
-    return calculateDistance(v1CenterX, v1CenterY, v2CenterX, v2CenterY);
-}
+
 
 // Find all buildings of certain type and sort by effective travel time
-export function findClosestAmong(graph, startVertex, vertices) {
+export function findClosestByTime(startVertex, vertices, vlabels, elabel) {
     // Check if start vertex is null
     if (!startVertex) {
-        console.warn("Null start vertex in findClosestBuildingsByType");
+        console.warn("Null start vertex in findClosestByTime");
         return [];
     }
     
@@ -174,11 +156,11 @@ export function findClosestAmong(graph, startVertex, vertices) {
             let travelTime;
             
             // Try finding a path with roads
-            const { totalTime, path } = findFastestPath(startVertex, vertex, graph);
+            const { totalTime, path } = findFastestPath(startVertex, vertex, vlabels, elabel);
             
             // If no valid path was found, use direct distance
             if (totalTime === Infinity) {
-                travelTime = calculateDirectDistance(startVertex, vertex);
+                travelTime = distance(startVertex, vertex);
             } else {
                 travelTime = totalTime;
             }

@@ -17,7 +17,7 @@ export function saveGame() {
         // Currently exceeds storage quota
 
         base_terrain: gameInstance.state.base_terrain,
-        terrain_compression: gameInstance.state.terrain_compression,
+        terrain_scaling: gameInstance.state.terrain_scaling,
         map_trees: gameInstance.state.map_trees,
 
         game_env: gameInstance.state.game_env,
@@ -26,10 +26,10 @@ export function saveGame() {
             try {
                 const json = person.toJSON();
                 // Also save current path information
-                json.hasPath = person.currentPath && person.currentPath.length > 0;
+                json.hasPath = person.data.currentPath && person.data.currentPath.length > 0;
                 if (json.hasPath) {
-                    json.pathIds = person.currentPath.map(vertex => vertex.id);
-                    json.pathIndex = person.currentPathIndex;
+                    json.pathIds = person.data.currentPath.map(vertex => vertex.id);
+                    json.pathIndex = person.data.currentPathIndex;
                 }
                 return json;
             } catch (error) {
@@ -84,16 +84,15 @@ export function loadGame() {
                 );
             }
 
-            gameInstance.state.terrain_compression = gameState.terrain_compression;
+            gameInstance.state.terrain_scaling = gameState.terrain_scaling;
             gameInstance.state.base_terrain = gameState.base_terrain;
-            gameInstance.state.terrain = scaleTerrain(gameInstance.state.base_terrain, gameInstance.state.terrain_compression);
+            gameInstance.state.terrain = scaleTerrain(gameInstance.state.base_terrain, gameInstance.state.terrain_scaling);
             
             gameInstance.state.map_trees = gameState.map_trees;
 
             gameInstance.state.game_env = gameState.game_env;
             
             // Restore people
-            gameInstance.state.people = [];
             if (gameState.people && Array.isArray(gameState.people)) {
                 gameState.people.forEach(personData => {
                     try {
@@ -112,20 +111,20 @@ export function loadGame() {
                         const personData = gameState.people.find(p => p.id === person.id);
                         if (personData && personData.hasPath && Array.isArray(personData.pathIds)) {
                             // Reconstruct path from saved vertex IDs
-                            person.currentPath = personData.pathIds.map(id => 
+                            person.data.currentPath = personData.pathIds.map(id => 
                                 Array.from(gameInstance.state.buildingGraph.vertices.values()).find(v => v.id === id)
                             ).filter(v => v !== undefined); // Filter out any vertices that no longer exist
-                            person.currentPathIndex = personData.pathIndex;
+                            person.data.currentPathIndex = personData.pathIndex;
                             
                             // Set the next target
-                            if (person.currentPath.length > 0) {
+                            if (person.data.currentPath.length > 0) {
                                 person.setNextTarget();
                             }
                         }
                     } catch (error) {
                         console.error("Error restoring person path:", error);
-                        person.currentPath = [];
-                        person.currentPathIndex = 0;
+                        person.data.currentPath = [];
+                        person.data.currentPathIndex = 0;
                     }
                 });
             }

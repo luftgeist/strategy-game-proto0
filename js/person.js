@@ -1,7 +1,7 @@
 // Person class and related functions
-import { calculateDistance } from './buildings.js';
+import { Distance, SpatialLabeledVertex } from './graph.js';
+import { findFastestPath, findClosestByTime } from './pathfinding.js';
 import config from './config.js';
-import { findFastestPath, findClosestAmong } from './pathfinding.js';
 import { drawImg, loadImg, shuffle } from './utils.js';
 import { storehouseDeposit, storehouseHasCapacity, storehouseWithdraw, canStorehouseProvide } from './resources.js';
 
@@ -33,100 +33,93 @@ export const FEMALE_NAMES = [
 const img_male = loadImg('p/people_male_young.png')
 
 
-export class Person {
+export class Person extends SpatialLabeledVertex {
     constructor(spawnvertex, id = null, name, actiontext = "homeless", gender = null) {
-        this.id = id ? id : '' + Math.floor(Math.random() * 100000000000000);
-        this.gender = gender || (this.id % 2 === 0) ? 'f' : 'm';
+
+        id = id ? id : '' + Math.floor(Math.random() * 100000000000000);
+
+        super({id, x: spawnvertex.x, y: spawnvertex.y, type: 'person', vlabels: ['people'], elabels: ['rels']})
+
+        this.data.gender = gender || (this.id % 2 === 0) ? 'f' : 'm';
         const rand = Math.floor(Math.random()*10);
-        this.name = name ||  (gender === 'f') ? FEMALE_NAMES[rand] : MALE_NAMES[rand];
-        this.walking = 0;
+        this.data.name = name ||  (this.data.gender === 'f') ? FEMALE_NAMES[rand] : MALE_NAMES[rand];
+        this.data.walking = 0;
         
-        this.home = null; 
-        this.workplace = null;  
+        this.data.home = null; 
+        this.data.workplace = null;  
 
-        this.currentPath = [spawnvertex];
-        this.oldPath = [];
+        this.data.currentPath = [spawnvertex];
+        this.data.oldPath = [];
 
-        this.x = spawnvertex.x
-        this.y = spawnvertex.y
-
-        this.timer = 3000;
+        this.data.timer = 3000;
         
-        this.baseSpeed = 0.05 + Math.random()*0.05;
-        this.onRoad = false;
+        this.data.baseSpeed = 0.05 + Math.random()*0.05;
+        this.data.onRoad = false;
 
-        this.actiontext = actiontext;
+        this.data.actiontext = actiontext;
 
-        this.inventory = {};
+        this.data.inventory = {};
 
-        this.skills = {};
+        this.data.tasks = [];
 
-        this.tasks = [];
-
-        this.const = {
+        this.data.const = {
             body: 0.5,
             sec: 0.5,
         }
 
-        this.relsTo = {};
-        
-        // cache
-        this.relsFrom = {};
-
-        this.needs = {
+        this.data.needs = {
             nourishment: 0.7,
             clothes: 0.8,
             rested: 0.9,
             social: 0.6,
             sex: 0.5
         }
-        window.person = this;
     }
 
     async update(deltatime, resources){
-        if (this.currentPath.length === 1){
-            this.timer -= deltatime;
+        if (this.data.currentPath.length === 1){
+            this.data.timer -= deltatime;
             let newTarget = null;
-            if (this.timer <= 0){
-                this.timer = 3000;
-                const buildingType = gameInstance.config.buildingTypes[this.currentPath[0].type];
+            if (this.data.timer <= 0){
+                this.data.timer = 3000;
+                const buildingType = gameInstance.config.buildingTypes[this.data.currentPath[0].type];
                 try {
-                    newTarget = await buildingType.work(deltatime, this, this.currentPath[0]);
+                    newTarget = await buildingType.work(deltatime, this, this.data.currentPath[0]);//
                 } catch (e) {
                     console.error('error while working: ',e);
-                    newTarget = this.home || gameInstance.state.storehouse;
+                    newTarget = this.data.home || gameInstance.state.storehouse;
                 }
                 newTarget = this.checkNeeds(newTarget);
             }
             if (newTarget){
                 this.getNewPath(newTarget);
-                this.oldPath.push(this.currentPath[0].id);
-                if (this.oldPath.length > 5){
-                    this.oldPath.shift();
+                this.data.oldPath.push(this.data.currentPath[0].id);
+                if (this.data.oldPath.length > 5){
+                    this.data.oldPath.shift();
                 }
             }
         } else {
             const reachedTarget = this.moveTowardsTarget(deltatime);
             this.checkOnRoad();
             if (reachedTarget){
-                if (this.currentPath.length >= 2){
-                    this.currentPath.shift(); 
+                if (this.data.currentPath.length >= 2){
+                    this.data.currentPath.shift(); 
                 }
             }
         }
     }
 
     checkOnRoad(){
-        const vertex1 = this.currentPath[0];
-        const vertex2 = this.currentPath[1];
+        const vertex1 = this.data.currentPath[0];
+        const vertex2 = this.data.currentPath[1];
 
-        this.onRoad = false;
+        this.data.onRoad = false;
             
-        for (const edge of vertex1.edges) {
+        for (const edge of vertex1.e.buildings) {
             if (edge.type === 'road' && 
                 ((edge.v0 === vertex1 && edge.v1 === vertex2) || 
                     (edge.v0 === vertex2 && edge.v1 === vertex1))) {
-                this.onRoad = true;
+                this.data.onRoad = true;
                 return;
             }
         }
@@ -135,24 +128,24 @@ export class Person {
     }
 
     getNewPath(newTarget, origin = null){
-        if (this.currentPath.length !== 1) throw new Error('Debug: currentPath not length 1');
-        const orig = origin || this.currentPath[this.currentPath.length-1];
+        if (this.data.currentPath.length !== 1) throw new Error('Debug: currentPath not length 1');
+        const orig = origin || this.data.currentPath[this.data.currentPath.length-1];
         const newpath = null;//gameInstance.state.pathdb.check(this.id, origin, newTarget)
         if (newpath) {
-            this.currentPath = newpath;
+            this.data.currentPath = newpath;
             return;
         } else {
-            const { path } = findFastestPath(orig, newTarget, gameInstance.state.buildingGraph);
-            this.currentPath = path;
+            const { path } = findFastestPath(orig, newTarget, ['buildings'], 'buildings');
+            this.data.currentPath = path;
         }
 
     }
 
     moveTowardsTarget(deltaTime){
         // Calculate distance to target
-        const target = this.currentPath[1];
+        const target = this.data.currentPath[1];
 
-        const distanceToTarget = calculateDistance(
+        const distanceToTarget = Distance(
             this.x, this.y, 
             target.x, target.y);
         
@@ -171,10 +164,10 @@ export class Person {
         const cappedDeltaTime = Math.min(deltaTime, 500);
 
         // Calculate move speed with capped deltaTime
-        let moveSpeed = this.baseSpeed * (cappedDeltaTime / 16.67);  // 16.67ms is approx one frame at 60fps
+        let moveSpeed = this.data.baseSpeed * (cappedDeltaTime / 16.67);  // 16.67ms is approx one frame at 60fps
         
         // Double speed if on a road
-        if (this.onRoad) {
+        if (this.data.onRoad) {
             moveSpeed *= 2;
         }
         
@@ -192,19 +185,22 @@ export class Person {
         // Regular movement
         this.x += directionX * moveDistance;
         this.y += directionY * moveDistance;
-        this.walking += 0.25 * gameInstance.state.speed;
+        this.data.walking += 0.25 * gameInstance.state.speed;
         return false;
         
     }
 
     findJob(){
-        const openjobs = Array.from(gameInstance.state.buildingGraph.vertices.values())
-        .filter((vertex)=>(
-            vertex.data.maxWorkers && 
+        const openJobs = [];
+        for (let vid of gameInstance.state.graph.V.buildings){
+            const vertex = gameInstance.state.graph.vertices[vid];
+            if (vertex.data.maxWorkers && 
             (vertex.data.workers.length < vertex.data.maxWorkers) && 
-            vertex.data.active
-        ));
-        const candidates = findClosestAmong(gameInstance.state.buildingGraph, this.home, openjobs);
+            vertex.data.active){
+                openJobs.push(vertex);
+            }
+        }
+        const candidates = findClosestByTime(this.data.home, openJobs, ['buildings'], 'buildings');
         if (candidates.length > 0){
             this.assignToWork(candidates[0].building);
             return candidates[0].building;
@@ -213,12 +209,16 @@ export class Person {
     }
 
     findHome(){
-        const openHouses = Array.from(gameInstance.state.buildingGraph.vertices.values())
-        .filter((vertex)=>(
-            vertex.data.maxResidents && 
-            (vertex.data.residents.length < vertex.data.maxResidents)
-        ));
-        const candidates = findClosestAmong(gameInstance.state.buildingGraph, gameInstance.state.storehouse, openHouses);
+        const openHouses = []
+        for (let vid of gameInstance.state.graph.V.buildings){
+            const vertex = gameInstance.state.graph.vertices[vid]
+            if (vertex.data.maxResidents && 
+            (vertex.data.residents.length < vertex.data.maxResidents)){
+                openHouses.push(vertex)
+            }
+        }
+        const candidates = findClosestByTime(gameInstance.state.storehouse, openHouses, ['buildings'], 'buildings');
+        console.log(candidates)
         if (candidates.length > 0){
             this.assignToHome(candidates[0].building);
             return candidates[0].building;
@@ -228,44 +228,44 @@ export class Person {
 
     // gets executed once before leaving to new target
     checkNeeds(newTarget){
-        if (!this.home){
-            this.actiontext = 'searching home';
+        if (!this.data.home){
+            this.data.actiontext = 'searching home';
             this.findHome();
             return newTarget;
         }
-        if (this.home && !this.workplace){
-            this.actiontext = 'searching job';
+        if (this.data.home && !this.data.workplace){
+            this.data.actiontext = 'searching job';
             this.findJob();
             return newTarget;
         }
-        if (this.home && this.isAt(this.home)){
+        if (this.data.home && this.isAt(this.data.home)){
             const foodthreshold = gameInstance.state.game_env.needs.ration || gameInstance.config.NEEDS.PECKISH;
-            if (this.needs.nourishment < foodthreshold){
+            if (this.data.needs.nourishment < foodthreshold){
                 const FOODS = shuffle(gameInstance.config.FOODS)
                 for(let food of FOODS){
                     if (canStorehouseProvide({[food]: 1})){
                         storehouseWithdraw({[food]: 1})
-                        this.home.data.residents.forEach((r)=>{
-                            const resisdent = gameInstance.state.people.get(r);
-                            resisdent.needs.nourishment += gameInstance.config.NEEDS.NOURISHMENT
+                        this.data.home.data.residents.forEach((rid)=>{
+                            const resisdent = gameInstance.state.graph.vertices[rid];
+                            resisdent.data.needs.nourishment += gameInstance.config.NEEDS.NOURISHMENT
                         })
                         break;
                     }
                 }
                 
             }
-            if (this.needs.clothes < gameInstance.config.NEEDS.WORN){
+            if (this.data.needs.clothes < gameInstance.config.NEEDS.WORN){
                 if (canStorehouseProvide({clothes: 1})){
                     storehouseWithdraw({clothes: 1})
-                    this.home.residents.forEach((r)=>{
-                        const resisdent = gameInstance.state.people.get(r);
-                        resisdent.needs.clothes += gameInstance.config.NEEDS.NEW_CLOTHES;
+                    this.data.home.residents.forEach((r)=>{
+                        const resisdent = gameInstance.state.vertices[r];
+                        resisdent.data.needs.clothes += gameInstance.config.NEEDS.NEW_CLOTHES;
                     })
                 }
             }
-        } else if (this.workplace && this.isAt(this.workplace)){
-            this.needs.nourishment -= gameInstance.config.NEEDS.APPETITE;
-            this.needs.clothes -= gameInstance.config.NEEDS.WEAR_OUT;
+        } else if (this.data.workplace && this.isAt(this.data.workplace)){
+            this.data.needs.nourishment -= gameInstance.config.NEEDS.APPETITE;
+            this.data.needs.clothes -= gameInstance.config.NEEDS.WEAR_OUT;
         } else {
             // if somewhere else than home or work
         }
@@ -273,34 +273,34 @@ export class Person {
     }
 
     isAt(vertex, eps = 5){
-        const distance = calculateDistance(this.x, this.y, vertex.x, vertex.y);
+        const distance = Distance(this.x, this.y, vertex.x, vertex.y);
         return distance < eps; // 5 units radius
     }
 
     assignTo(feature, vertex, key) {
         // Remove from previous workplace if any
-        if (this[feature]) {
-            const index = this[feature].data[key].findIndex((p)=>p.id === this.id);
-            this[feature].data[key].splice(index, 1);
+        if (this.data[feature]) {
+            const index = this.data[feature].data[key].findIndex((p)=>p.id === this.id);
+            this.data[feature].data[key].splice(index, 1);
         }
         
         // Assign to new workplace
-        this[feature] = vertex;
-        this[feature].data[key] = (this[feature].data[key] || [])
-        this[feature].data[key].push(this.id);
+        this.data[feature] = vertex;
+        this.data[feature].data[key] = (this.data[feature].data[key] || [])
+        this.data[feature].data[key].push(this.id);
     }
     
     loose(feature, key) {
-        if (this[feature]) {
-            const index = this[feature].data[key].findIndex((p)=>p.id === this.id);
-            this[feature].data[key].splice(index, 1);
-            this[feature] = null;
+        if (this.data[feature]) {
+            const index = this.data[feature].data[key].findIndex((p)=>p.id === this.id);
+            this.data[feature].data[key].splice(index, 1);
+            this.data[feature] = null;
         }
     }
 
     looseWork(){
         this.loose('workplace', 'workers')
-        this.currentPath = this.getNewPath(this.home || gameInstance.state.storehouse)
+        this.data.currentPath = this.getNewPath(this.data.home || gameInstance.state.storehouse)
     }
 
     assignToWork(workplace){
@@ -313,7 +313,7 @@ export class Person {
 
     looseHome(){
         this.loose('home', 'residents');
-        this.currentPath = this.getNewPath(gameInstance.state.storehouse)
+        this.data.currentPath = this.getNewPath(gameInstance.state.storehouse)
     }
 
     calcNeedBar(needname, needvalue, statusTexts, needConfig){
@@ -339,28 +339,28 @@ export class Person {
 
     onSelect(selectionMenu, content) {        
         content.innerHTML = `
-            <div>${this.name}</div>
+            <div>${this.data.name}</div>
             <button id="home-button">Home</button>
-            <button id="workplace-button">Workplace: ${this.workplace ? this.workplace.type.charAt(0).toUpperCase() + this.workplace.type.slice(1) : 'Unemployed'}</button>
-            <div>Action: ${this.actiontext}</div>
-            ${this.workplace ? `<button id="quit-job">Quit Job</button>` : ''}
+            <button id="workplace-button">Workplace: ${this.data.workplace ? this.data.workplace.type.charAt(0).toUpperCase() + this.data.workplace.type.slice(1) : 'Unemployed'}</button>
+            <div>Action: ${this.data.actiontext}</div>
+            ${this.data.workplace ? `<button id="quit-job">Quit Job</button>` : ''}
             <div style="margin-top: 5px; margin-bottom: 8px;">
-                ${this.calcNeedBar("nourishment",this.needs.nourishment, ["Well Fed", "Peckish", "Hungry"], [config.NEEDS.PECKISH, config.NEEDS.HUNGER])}
-                ${this.calcNeedBar("clothing",this.needs.clothes, ["Well dressed", "could use new clothes", "wearing ruggs"], [config.NEEDS.WORN_CLOTHES, config.NEEDS.WEARING_RUGGS])}
+                ${this.calcNeedBar("nourishment",this.data.needs.nourishment, ["Well Fed", "Peckish", "Hungry"], [config.NEEDS.PECKISH, config.NEEDS.HUNGER])}
+                ${this.calcNeedBar("clothing",this.data.needs.clothes, ["Well dressed", "could use new clothes", "wearing ruggs"], [config.NEEDS.WORN_CLOTHES, config.NEEDS.WEARING_RUGGS])}
             </div>
         `;
         
         // Add event listeners for the buttons
-        if (this.workplace) {
+        if (this.data.workplace) {
             document.getElementById('quit-job').addEventListener('click', () => {
                 this.quitJob();
                 this.onSelect(selectionMenu, content); // Refresh display
             });
         }
-        if (this.home){
+        if (this.data.home){
             const bt = document.querySelector('#home-button');
             bt.addEventListener('click', ()=>{
-                window.gameInstance.selectBuilding(this.home, true);
+                window.gameInstance.selectBuilding(this.data.home, true);
             })
         }
 
@@ -372,34 +372,13 @@ export class Person {
     }
     
     toJSON() {
-        return {
-            id: this.id,
-            name: this.name,
-            homeId: this.home ? this.home.id : null,
-            workplaceId: this.workplace ? this.workplace.id : null,
-            currentPath: this.currentPath.map((v)=>v.id),
-            oldPath: this.oldPath,
-            timer: this.timer,
-            needs: this.needs,
-            inventory: this.inventory,
-        };
+        const vertex = super.toJSON();
+        vertex.data.currentPath = vertex.data.currentPath.map((v)=>v.id);
+        return vertex;
     }
     
-    static fromJSON(json, buildingGraph, vertexArray = Array.from(buildingGraph.vertices.values())) {
-        // Find the home and workplace buildings
-        const home = vertexArray.find(v => v.id === json.homeId);
-        const workplace = json.workplaceId ? vertexArray.find(v => v.id === json.workplaceId) : null;
-        const currentPath = json.currentPath.map(p=>vertexArray.find((v)=>v.id === p.id));
-        
-        const person = new Person(home, json.id, json.name);
-        person.stateTimer = json.stateTimer;
-        person.currentPath = currentPath;
-        person.oldPath = json.oldPath;
-        person.needs = json.needs;
-        person.inventory = json.inventory || {};
-        person.workplace = workplace;
-        
-        return person;
+    static fromJSON(){
+        return true
     }
 }
 
@@ -411,7 +390,8 @@ export function drawPeople() {
     const zoom = gameInstance.state.zoom;
     //const selectedPerson = gameInstance.state.selectedPerson
     // Draw each person
-    gameInstance.state.people.forEach((person) => {
+    for (const pid of gameInstance.state.graph.V.people){
+        const person = gameInstance.state.graph.vertices[pid];
         // Calculate screen position
         const screenX = (person.x - viewportX) * zoom;
         const screenY = (person.y - viewportY) * zoom;
@@ -423,24 +403,9 @@ export function drawPeople() {
             const width = img_male.naturalWidth*zoom*gameInstance.config.people_size;
             const height = img_male.naturalHeight*zoom*gameInstance.config.people_size;
 
-            const jump = Math.sin(person.walking) * 1;
+            const jump = Math.sin(person.data.walking) * 1;
             
             drawImg(ctx, screenX, screenY, img_male, width , height , 0, 0+jump, 1,)
         }
-    });
-}
-
-// Find a person at the given position
-export function findPersonAtPosition(people, mapX, mapY) {
-    // Check a small radius around the click
-    const clickRadius = 10;
-    
-    for (const person of people.values()) {
-        const distance = calculateDistance(mapX, mapY, person.x, person.y);
-        if (distance <= clickRadius) {
-            return person;
-        }
-    }
-    
-    return null;
+    };
 }
