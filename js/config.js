@@ -3,6 +3,7 @@ import { createRoadPattern } from "./pattern.js";
 import { storehouseHasCapacity, canStorehouseProvide, storehouseDeposit, storehouseWithdraw } from "./resources.js";
 import { setMessage } from "./ui.js";
 import { loadImg, drawImg } from "./utils.js";
+import { v, e } from "./graph.js";
 // Game configuration settings
 const roadPattern = createRoadPattern(document.querySelector('#building-canvas'), 'black');
 
@@ -67,12 +68,12 @@ const config = {
             tag: 'housing',
             data: {
                 residents: [],
-                maxResidests: 2,
+                maxResidents: 2,
                 buildstate: -1,
             },
             init(vertex){
-                const person = new Person(gameInstance.state.storehouse);
-                person.assignToHome(vertex);
+                const storehouse = v(gameInstance.state.storehouse)
+                const person = new Person({spawnvertex: storehouse});
                 gameInstance.state.graph.addVertex(person, ['people']);
             },
             onselect: function(vertex, selectionMenu, content) {
@@ -87,7 +88,7 @@ const config = {
                         for (let resident of vertex.data.residents){
                             for (let pid of window.gameInstance.state.graph.V.people){
                                 const peop = window.gameInstance.state.graph.vertices[pid];
-                                if (resident === peop.id && peop.data.home && peop.data.home.id === vertex.id){
+                                if (resident === peop.id && peop.data.home && peop.data.home === vertex.id){
                                     peop.looseHome();
                                 }
                             }
@@ -187,7 +188,7 @@ const config = {
                 if (checkBuilding(here, person)){
                     return null;
                 }
-                const workplace = person.data.workplace;
+                const workplace = v(person.data.workplace);
                 if (!workplace.data.active) {
                     person.data.actiontext = 'returning home'
                     return person.data.home;

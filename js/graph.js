@@ -143,29 +143,13 @@ export class SpatialLabeledGraph extends EventTarget {
             cellSize: this.cellSize,
             vertices: Object.values(this.vertices).map(v => ({
                 id: v.id, x: v.x, y: v.y, vlabels: v.labels, 
-                type: v.type, data: v.data //elabels?
+                type: v.type, data: v.data, elabels: Object.keys(v.e)
             })),
             edges: Object.values(this.edges).map(e => ({
                 id: e.id, _v0: e._v0, _v1: e._v1, label: e.label,
                 type: e.type, data: e.data
             }))
         };
-    }
-
-    static fromJSON(json) {
-        const graph = new SpatialLabeledGraph({}, { cellSize: json.cellSize });
-        
-        for (let vData of json.vertices) {
-            const vertex = new SpatialLabeledVertex(vData);
-            graph.addVertex(vertex);
-        }
-        
-        for (let eData of json.edges) {
-            const edge = new LabeledEdge(eData);
-            graph.addEdge(edge);
-        }
-        
-        return graph;
     }
 }
 
@@ -222,6 +206,16 @@ export class LabeledEdge {
     getOtherVertex(vertex) {
         return this.v0.id === vertex.id ? this.v1 : this.v0;
     }
+}
+
+export function v(vid){
+    return gameInstance.state.graph.vertices[vid];
+}
+
+window.vFunc = v;
+
+export function e(eid){
+    return gameInstance.state.graph.edges[eid]
 }
 
 export function distance(p1, p2) {

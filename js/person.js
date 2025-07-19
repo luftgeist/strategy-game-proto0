@@ -1,5 +1,5 @@
 // Person class and related functions
-import { Distance, SpatialLabeledVertex } from './graph.js';
+import { Distance, SpatialLabeledVertex, v, e } from './graph.js';
 import { findFastestPath, findClosestByTime } from './pathfinding.js';
 import config from './config.js';
 import { drawImg, loadImg, shuffle } from './utils.js';
@@ -34,40 +34,42 @@ const img_male = loadImg('p/people_male_young.png')
 
 
 export class Person extends SpatialLabeledVertex {
-    constructor(spawnvertex, id = null, name, actiontext = "homeless", gender = null) {
+    constructor({x, y, spawnvertex = {}, id = null, vlabels = ['people'], elabels = ['rels'], 
+        data = {name: null, actiontext: "homeless", gender: null,}
+    }) {
 
         id = id ? id : '' + Math.floor(Math.random() * 100000000000000);
 
-        super({id, x: spawnvertex.x, y: spawnvertex.y, type: 'person', vlabels: ['people'], elabels: ['rels']})
+        super({id, x: x || spawnvertex.x, y: y || spawnvertex.y, type: 'person', vlabels, elabels})
 
-        this.data.gender = gender || (this.id % 2 === 0) ? 'f' : 'm';
+        this.data.gender = data.gender || (this.id % 2 === 0) ? 'f' : 'm';
         const rand = Math.floor(Math.random()*10);
-        this.data.name = name ||  (this.data.gender === 'f') ? FEMALE_NAMES[rand] : MALE_NAMES[rand];
-        this.data.walking = 0;
+        this.data.name = data.name ||  (this.data.gender === 'f') ? FEMALE_NAMES[rand] : MALE_NAMES[rand];
+        this.data.walking = data.walking || 0;
         
-        this.data.home = null; 
-        this.data.workplace = null;  
+        this.data.home = data.home || null; 
+        this.data.workplace = data.workplace || null;  
 
-        this.data.currentPath = [spawnvertex];
-        this.data.oldPath = [];
+        this.data.currentPath = data.currentPath || [spawnvertex];
+        this.data.oldPath = data.oldPath || [];
 
         this.data.timer = 3000;
         
-        this.data.baseSpeed = 0.05 + Math.random()*0.05;
-        this.data.onRoad = false;
+        this.data.baseSpeed = data.baseSpeed || 0.05 + Math.random()*0.05;
+        this.data.onRoad = data.onRoad || false;
 
-        this.data.actiontext = actiontext;
+        this.data.actiontext = data.actiontext
 
-        this.data.inventory = {};
+        this.data.inventory = data.inventory || {};
 
-        this.data.tasks = [];
+        this.data.tasks = data.tasks || [];
 
-        this.data.const = {
+        this.data.const = data.const || {
             body: 0.5,
             sec: 0.5,
         }
 
-        this.data.needs = {
+        this.data.needs = data.needs || {
             nourishment: 0.7,
             clothes: 0.8,
             rested: 0.9,
@@ -79,20 +81,20 @@ export class Person extends SpatialLabeledVertex {
     async update(deltatime, resources){
         if (this.data.currentPath.length === 1){
             this.data.timer -= deltatime;
-            let newTarget = null;
+            let newTargetId = null;
             if (this.data.timer <= 0){
                 this.data.timer = 3000;
                 const buildingType = gameInstance.config.buildingTypes[this.data.currentPath[0].type];
                 try {
-                    newTarget = await buildingType.work(deltatime, this, this.data.currentPath[0]);//
+                    newTargetId = await buildingType.work(deltatime, this, this.data.currentPath[0]);//
                 } catch (e) {
                     console.error('error while working: ',e);
-                    newTarget = this.data.home || gameInstance.state.storehouse;
+                    newTargetId = this.data.home || gameInstance.state.storehouse;
                 }
-                newTarget = this.checkNeeds(newTarget);
+                newTargetId = this.checkNeeds(newTargetId);
             }
-            if (newTarget){
-                this.getNewPath(newTarget);
+            if (newTargetId){
+                this.getNewPath(v(newTargetId));
                 this.data.oldPath.push(this.data.currentPath[0].id);
                 if (this.data.oldPath.length > 5){
                     this.data.oldPath.shift();
@@ -128,15 +130,16 @@ export class Person extends SpatialLabeledVertex {
     }
 
     getNewPath(newTarget, origin = null){
-        if (this.data.currentPath.length !== 1) throw new Error('Debug: currentPath not length 1');
-        const orig = origin || this.data.currentPath[this.data.currentPath.length-1];
+        //if (this.data.currentPath.length !== 1) throw new Error('Debug: currentPath not length 1');
+        const orig = origin || this.data.currentPath[0];
         const newpath = null;//gameInstance.state.pathdb.check(this.id, origin, newTarget)
         if (newpath) {
             this.data.currentPath = newpath;
-            return;
+            return newpath;
         } else {
             const { path } = findFastestPath(orig, newTarget, ['buildings'], 'buildings');
             this.data.currentPath = path;
+            return path;
         }
 
     }
@@ -200,7 +203,7 @@ export class Person extends SpatialLabeledVertex {
                 openJobs.push(vertex);
             }
         }
-        const candidates = findClosestByTime(this.data.home, openJobs, ['buildings'], 'buildings');
+        const candidates = findClosestByTime(v(this.data.home), openJobs, ['buildings'], 'buildings');
         if (candidates.length > 0){
             this.assignToWork(candidates[0].building);
             return candidates[0].building;
@@ -217,8 +220,7 @@ export class Person extends SpatialLabeledVertex {
                 openHouses.push(vertex)
             }
         }
-        const candidates = findClosestByTime(gameInstance.state.storehouse, openHouses, ['buildings'], 'buildings');
-        console.log(candidates)
+        const candidates = findClosestByTime(v(gameInstance.state.storehouse), openHouses, ['buildings'], 'buildings');
         if (candidates.length > 0){
             this.assignToHome(candidates[0].building);
             return candidates[0].building;
@@ -227,25 +229,25 @@ export class Person extends SpatialLabeledVertex {
     }
 
     // gets executed once before leaving to new target
-    checkNeeds(newTarget){
+    checkNeeds(newTargetId){
         if (!this.data.home){
             this.data.actiontext = 'searching home';
             this.findHome();
-            return newTarget;
+            return newTargetId;
         }
         if (this.data.home && !this.data.workplace){
             this.data.actiontext = 'searching job';
             this.findJob();
-            return newTarget;
+            return newTargetId;
         }
-        if (this.data.home && this.isAt(this.data.home)){
+        if (this.data.home && this.isAt(v(this.data.home))){
             const foodthreshold = gameInstance.state.game_env.needs.ration || gameInstance.config.NEEDS.PECKISH;
             if (this.data.needs.nourishment < foodthreshold){
                 const FOODS = shuffle(gameInstance.config.FOODS)
                 for(let food of FOODS){
                     if (canStorehouseProvide({[food]: 1})){
                         storehouseWithdraw({[food]: 1})
-                        this.data.home.data.residents.forEach((rid)=>{
+                        v(this.data.home).data.residents.forEach((rid)=>{
                             const resisdent = gameInstance.state.graph.vertices[rid];
                             resisdent.data.needs.nourishment += gameInstance.config.NEEDS.NOURISHMENT
                         })
@@ -257,19 +259,19 @@ export class Person extends SpatialLabeledVertex {
             if (this.data.needs.clothes < gameInstance.config.NEEDS.WORN){
                 if (canStorehouseProvide({clothes: 1})){
                     storehouseWithdraw({clothes: 1})
-                    this.data.home.residents.forEach((r)=>{
-                        const resisdent = gameInstance.state.vertices[r];
+                    v(this.data.home).residents.forEach((rid)=>{
+                        const resisdent = gameInstance.state.vertices[rid];
                         resisdent.data.needs.clothes += gameInstance.config.NEEDS.NEW_CLOTHES;
                     })
                 }
             }
-        } else if (this.data.workplace && this.isAt(this.data.workplace)){
+        } else if (this.data.workplace && this.isAt(v(this.data.workplace))){
             this.data.needs.nourishment -= gameInstance.config.NEEDS.APPETITE;
             this.data.needs.clothes -= gameInstance.config.NEEDS.WEAR_OUT;
         } else {
             // if somewhere else than home or work
         }
-        return newTarget;
+        return newTargetId;
     }
 
     isAt(vertex, eps = 5){
@@ -280,27 +282,31 @@ export class Person extends SpatialLabeledVertex {
     assignTo(feature, vertex, key) {
         // Remove from previous workplace if any
         if (this.data[feature]) {
-            const index = this.data[feature].data[key].findIndex((p)=>p.id === this.id);
-            this.data[feature].data[key].splice(index, 1);
+            const index = v(this.data[feature]).data[key].findIndex((p)=>p.id === this.id);
+            v(this.data[feature]).data[key].splice(index, 1);
         }
         
         // Assign to new workplace
-        this.data[feature] = vertex;
-        this.data[feature].data[key] = (this.data[feature].data[key] || [])
-        this.data[feature].data[key].push(this.id);
+        this.data[feature] = vertex.id;
+        vertex.data[key] = vertex.data[key] || [];
+        vertex.data[key] = vertex.data[key] || []
+        vertex.data[key].push(this.id);
     }
     
     loose(feature, key) {
         if (this.data[feature]) {
-            const index = this.data[feature].data[key].findIndex((p)=>p.id === this.id);
-            this.data[feature].data[key].splice(index, 1);
+            const vertex = v(this.data[feature]);
+            if (vertex){
+                const index = vertex.data[key].findIndex((p)=>p.id === this.id);
+                vertex.data[key].splice(index, 1);
+            }
             this.data[feature] = null;
         }
     }
 
     looseWork(){
         this.loose('workplace', 'workers')
-        this.data.currentPath = this.getNewPath(this.data.home || gameInstance.state.storehouse)
+        this.data.currentPath = this.getNewPath(v(this.data.home || gameInstance.state.storehouse))
     }
 
     assignToWork(workplace){
@@ -313,7 +319,7 @@ export class Person extends SpatialLabeledVertex {
 
     looseHome(){
         this.loose('home', 'residents');
-        this.data.currentPath = this.getNewPath(gameInstance.state.storehouse)
+        this.data.currentPath = this.getNewPath(v(gameInstance.state.storehouse))
     }
 
     calcNeedBar(needname, needvalue, statusTexts, needConfig){
@@ -341,7 +347,7 @@ export class Person extends SpatialLabeledVertex {
         content.innerHTML = `
             <div>${this.data.name}</div>
             <button id="home-button">Home</button>
-            <button id="workplace-button">Workplace: ${this.data.workplace ? this.data.workplace.type.charAt(0).toUpperCase() + this.data.workplace.type.slice(1) : 'Unemployed'}</button>
+            <button id="workplace-button">Workplace: ${this.data.workplace ? v(this.data.workplace).type.charAt(0).toUpperCase() + v(this.data.workplace).type.slice(1) : 'Unemployed'}</button>
             <div>Action: ${this.data.actiontext}</div>
             ${this.data.workplace ? `<button id="quit-job">Quit Job</button>` : ''}
             <div style="margin-top: 5px; margin-bottom: 8px;">
@@ -360,7 +366,7 @@ export class Person extends SpatialLabeledVertex {
         if (this.data.home){
             const bt = document.querySelector('#home-button');
             bt.addEventListener('click', ()=>{
-                window.gameInstance.selectBuilding(this.data.home, true);
+                window.gameInstance.selectBuilding(v(this.data.home), true);
             })
         }
 
@@ -371,13 +377,13 @@ export class Person extends SpatialLabeledVertex {
         }, 2000) // Refresh Display
     }
     
-    toJSON() {
-        const vertex = super.toJSON();
+    static toJSON(vertex) {
         vertex.data.currentPath = vertex.data.currentPath.map((v)=>v.id);
         return vertex;
     }
     
-    static fromJSON(){
+    static fromJSON(vertex){
+        vertex.data.currentPath = vertex.data.currentPath.map((vid)=>v(vid))
         return true
     }
 }

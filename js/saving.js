@@ -1,8 +1,10 @@
 import { updateResourceMenu } from "./resources.js"; 
-import { scaleTerrain } from "./terrain.js";
-import { hideSelectionMenu } from "./ui.js";
+import { hideSelectionMenu, setMessage } from "./ui.js";
+import { initTerrain } from "./terrain.js";
+import { SpatialLabeledGraph, SpatialLabeledVertex, LabeledEdge } from "./graph.js";
+import { Person } from "./person.js";
 
-export function saveGame() {
+export function saveGame(path = "mapBuildingGame") {
     // Cancel animation frame to avoid issues during save
     if (gameInstance.state.animationFrame) {
         cancelAnimationFrame(gameInstance.state.animationFrame);
@@ -12,128 +14,115 @@ export function saveGame() {
         viewportX: gameInstance.state.viewportX,
         viewportY: gameInstance.state.viewportY,
         zoom: gameInstance.state.zoom,
-        buildingGraph: gameInstance.state.buildingGraph.toJSON(),
-
-        // Currently exceeds storage quota
-
-        base_terrain: gameInstance.state.base_terrain,
-        terrain_scaling: gameInstance.state.terrain_scaling,
-        map_trees: gameInstance.state.map_trees,
-
+        mapSeed: gameInstance.config.mapSeed,
+        terrain_scaling: gameInstance.config.terrain_scaling,
         game_env: gameInstance.state.game_env,
-
-        people: gameInstance.state.people.map(person => {
-            try {
-                const json = person.toJSON();
-                // Also save current path information
-                json.hasPath = person.data.currentPath && person.data.currentPath.length > 0;
-                if (json.hasPath) {
-                    json.pathIds = person.data.currentPath.map(vertex => vertex.id);
-                    json.pathIndex = person.data.currentPathIndex;
-                }
-                return json;
-            } catch (error) {
-                console.error("Error saving person:", error);
-                return null;
-            }
-        }).filter(p => p !== null) // Filter out any null entries
+        storehouse: gameInstance.state.storehouse,
+        townsquare: gameInstance.state.townsquare,
+        palace: gameInstance.state.palace,
     };
+    gameState.graph = {
+        cellSize: gameInstance.state.graph.cellSize,
+        vertices: Object.values(gameInstance.state.graph.vertices).map(v => {
+            let vData = {
+                id: v.id, x: v.x, y: v.y, vlabels: v.labels, 
+                type: v.type, data: {}, elabels: Object.keys(v.e)
+            }
+            for (let k of Object.keys(v.data)){
+                vData.data[k] = v.data[k]
+            }
+            if (v instanceof Person){
+                vData = Person.toJSON(vData);
+            }
+            return vData;
+        }),
+        edges: Object.values(gameInstance.state.graph.edges).map(e => {
+            const eData = {
+                id: e.id, _v0: e._v0, _v1: e._v1, label: e.label,
+                type: e.type, data: e.data
+            }
+            return eData;
+        })
+    };
+    console.log(gameState);
     
-    localStorage.setItem('mapBuildingGame', JSON.stringify(gameState));
-    console.log("Game saved.");
+    localStorage.setItem(path, JSON.stringify(gameState));
+    setMessage("Game saved.");
     
     // Restart animation loop
     gameInstance.state.lastFrameTime = performance.now();
     gameInstance.animationLoop(gameInstance.state.lastFrameTime);
 }
 
-export function loadGame() {
+export async function loadGame(path="mapBuildingGame") {
     // Cancel animation frame to avoid issues during load
     if (gameInstance.state.animationFrame) {
         cancelAnimationFrame(gameInstance.state.animationFrame);
     }
     
-    const savedState = localStorage.getItem('mapBuildingGame');
+    const savedState = localStorage.getItem(path);
     if (savedState) {
         try {
             const gameState = JSON.parse(savedState);
             
-            // Restore viewport and zoom
             gameInstance.state.viewportX = gameState.viewportX;
             gameInstance.state.viewportY = gameState.viewportY;
             gameInstance.state.zoom = gameState.zoom;
-            
-            // Restore building graph
-            if (gameState.buildingGraph) {
-                const { graph } = Graph.fromJSON(gameState.buildingGraph);
-                gameInstance.state.buildingGraph = graph;
-                
-                // Add event listener for graph changes
-                //gameInstance.state.buildingGraph.addEventListener('graph-update', gameInstance.handleGraphChange);
-                gameInstance.state.buildingGraph.addEventListener('graph-add-vertex', gameInstance.handleGraphChange);
-                gameInstance.state.buildingGraph.addEventListener('graph-rem-vertex', gameInstance.handleGraphChange);
-                gameInstance.state.buildingGraph.addEventListener('graph-rem-edge', gameInstance.handleGraphChange);
-                
-                // Find and set the storehouse reference
-                gameInstance.state.storehouse = Array.from(gameInstance.state.buildingGraph.vertices.values()).find(v => 
-                    v.type === 'storehouse'
-                );
-
-                gameInstance.state.palace = Array.from(gameInstance.state.buildingGraph.vertices.values()).find(v => 
-                    v.type === 'palace'
-                );
-            }
-
-            gameInstance.state.terrain_scaling = gameState.terrain_scaling;
-            gameInstance.state.base_terrain = gameState.base_terrain;
-            gameInstance.state.terrain = scaleTerrain(gameInstance.state.base_terrain, gameInstance.state.terrain_scaling);
-            
-            gameInstance.state.map_trees = gameState.map_trees;
-
             gameInstance.state.game_env = gameState.game_env;
-            
-            // Restore people
-            if (gameState.people && Array.isArray(gameState.people)) {
-                gameState.people.forEach(personData => {
-                    try {
-                        const person = Person.fromJSON(personData, gameInstance.state.buildingGraph);
-                        if (person) {
-                            gameInstance.state.people.push(person);
-                        }
-                    } catch (error) {
-                        console.error("Error loading person:", error);
-                    }
-                });
-                
-                // Restore people's paths if they had any
-                gameInstance.state.people.forEach(person => {
-                    try {
-                        const personData = gameState.people.find(p => p.id === person.id);
-                        if (personData && personData.hasPath && Array.isArray(personData.pathIds)) {
-                            // Reconstruct path from saved vertex IDs
-                            person.data.currentPath = personData.pathIds.map(id => 
-                                Array.from(gameInstance.state.buildingGraph.vertices.values()).find(v => v.id === id)
-                            ).filter(v => v !== undefined); // Filter out any vertices that no longer exist
-                            person.data.currentPathIndex = personData.pathIndex;
-                            
-                            // Set the next target
-                            if (person.data.currentPath.length > 0) {
-                                person.setNextTarget();
-                            }
-                        }
-                    } catch (error) {
-                        console.error("Error restoring person path:", error);
-                        person.data.currentPath = [];
-                        person.data.currentPathIndex = 0;
-                    }
-                });
+
+            gameInstance.state.graph.removeEventListener('graph-add-vertex', gameInstance.handleGraphChange);
+            gameInstance.state.graph.removeEventListener('graph-rem-vertex', gameInstance.handleGraphChange);
+            gameInstance.state.graph.removeEventListener('graph-rem-edge', gameInstance.handleGraphChange);
+
+            gameInstance.state.graph = new SpatialLabeledGraph(
+                {vertex_labels: {people: [], buildings: []}, edge_labels: {rels: [], buildings: []}}, { cellSize: gameState.graph.cellSize }
+            );
+                    
+            for (let vData of gameState.graph.vertices) {
+                let vertex; 
+                if (vData.type === "person"){
+                    vertex = new Person(vData);
+                } else {
+                    vertex = new SpatialLabeledVertex(vData);
+                }
+                gameInstance.state.graph.addVertex(vertex);
             }
             
-            // Clear selections
+            for (let eData of gameState.graph.edges) {
+                const edge = new LabeledEdge(eData);
+                gameInstance.state.graph.addEdge(edge);
+            }
+
+            for (let pid of gameInstance.state.graph.V.people){
+                Person.fromJSON(gameInstance.state.graph.vertices[pid])
+            }
+
+            gameInstance.state.graph.addEventListener('graph-add-vertex', gameInstance.handleGraphChange);
+            gameInstance.state.graph.addEventListener('graph-rem-vertex', gameInstance.handleGraphChange);
+            gameInstance.state.graph.addEventListener('graph-rem-edge', gameInstance.handleGraphChange);
+
+            gameInstance.state.storehouse = gameState.storehouse;
+            gameInstance.state.townsquare = gameState.townsquare;
+            gameInstance.state.palace = gameState.palace;
+
             gameInstance.state.selectedVertex = null;
             gameInstance.state.selectedEdge = null;
             gameInstance.state.selectedPerson = null;
             gameInstance.state.currentBuildingCategory = null;
+
+            if (gameState.mapSeed !== gameInstance.config.mapSeed || gameState.terrain_scaling !== gameInstance.config.terrain_scaling){
+                gameInstance.config.mapSeed = gameState.mapSeed;
+                gameInstance.config.terrain_scaling = gameState.terrain_scaling;
+
+                gameInstance.state.random.reset(gameInstance.config.mapSeed);
+                const {terrain, terrainBitmap, map_wildlife, map_trees } = await initTerrain(gameInstance.state, gameInstance.config);
+                
+                gameInstance.state.terrain = terrain;
+                gameInstance.state.terrain_bitmap = terrainBitmap;
+                gameInstance.state.map_trees = map_trees;
+                gameInstance.state.map_wildlife = map_wildlife;
+            }
+
             hideSelectionMenu();
             
             // Update UI
@@ -146,11 +135,13 @@ export function loadGame() {
             gameInstance.state.terrainNeedsRedraw = true;
             gameInstance.redraw();
             
-            console.log("Game loaded.");
+            setMessage("Game loaded.");
         } catch (e) {
+            setMessage('Unable to load Game');
             console.error("Error loading game:", e);
         }
     } else {
+        setMessage("No Save game");
         console.log("No saved game found.");
     }
     
@@ -158,3 +149,4 @@ export function loadGame() {
     gameInstance.state.lastFrameTime = performance.now();
     gameInstance.animationLoop(gameInstance.state.lastFrameTime);
 }
+

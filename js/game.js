@@ -1,5 +1,5 @@
 // Game class for handling game logic and state
-import { SpatialLabeledGraph, LabeledEdge, findVertexAtPosition, findEdgeAtPosition } from './graph.js';
+import { SpatialLabeledGraph, LabeledEdge, findVertexAtPosition, findEdgeAtPosition, v, e } from './graph.js';
 import { drawTerrain, drawMapObjects, initTerrain } from './terrain.js';
 import { 
     createBuildingVertex, drawBuildings, 
@@ -14,6 +14,7 @@ import {
 } from './ui.js';
 import { drawPeople } from './person.js';
 import { AudioManager } from './audio-manager.js';
+import { SeededRandom } from './random.js';
 
 // Visibility API helper
 function getVisibilityAPI() {
@@ -37,6 +38,7 @@ export class Game {
         
         // Game state
         this.state = {
+            random: new SeededRandom(this.config.mapSeed),
             graph: new SpatialLabeledGraph({vertex_labels: {people: [], buildings: []}, edge_labels: {rels: [], buildings: []}}, {cellSize: 100}), // Graph to store building vertices
 
             viewportX: 0,         // Current viewport position X
@@ -136,6 +138,7 @@ export class Game {
     
     async init() {
         // Generate the terrain
+        this.state.random.reset(this.config.mapSeed);
         const {terrain, terrainBitmap, map_wildlife, map_trees } = await initTerrain(this.state, this.config);
 
         this.state.terrain = terrain;
@@ -186,21 +189,21 @@ export class Game {
             y: this.config.mapHeight/2,
         };
 
-        this.state.townsquare = await createBuildingVertex(
+        const townsquare = await createBuildingVertex(
             'townsquare',
             map_center.x,
             map_center.y,
             this.config.buildingTypes
         );
 
-        this.state.storehouse = await createBuildingVertex(
+        const storehouse = await createBuildingVertex(
             'storehouse',
             map_center.x + 80,
             map_center.y - 80,
             this.config.buildingTypes
         );
 
-        this.state.palace = await createBuildingVertex(
+        const palace = await createBuildingVertex(
             'palace',
             map_center.x - 150,
             map_center.y - 150,
@@ -208,25 +211,32 @@ export class Game {
         )
 
 
-        this.state.graph.addVertex(this.state.townsquare);
-        this.state.graph.addVertex(this.state.storehouse);
-        this.state.graph.addVertex(this.state.palace);
+        this.state.graph.addVertex(townsquare);
+        this.state.graph.addVertex(storehouse);
+        this.state.graph.addVertex(palace);
+        this.state.townsquare = townsquare.id;
+        this.state.storehouse = storehouse.id;
+        this.state.palace = palace.id;
 
-        this.state.graph.addEdge(new LabeledEdge({_v0: this.state.palace.id, _v1: this.state.townsquare.id, type: 'road', label: 'buildings'}));
-        this.state.graph.addEdge(new LabeledEdge({_v0: this.state.storehouse.id, _v1: this.state.townsquare.id, type: 'road', label: 'buildings'}));
+        this.state.graph.addEdge(new LabeledEdge({_v0: this.state.palace, _v1: this.state.townsquare, type: 'road', label: 'buildings'}));
+        this.state.graph.addEdge(new LabeledEdge({_v0: this.state.storehouse, _v1: this.state.townsquare, type: 'road', label: 'buildings'}));
         
+        
+
+        // Create building menu categories
+    
         // Start animation loop
         this.state.lastFrameTime = performance.now();
         this.animationLoop(this.state.lastFrameTime);
 
-        this.centerViewport(this.state.palace);
+        this.centerViewport(palace);
 
-        // Create building menu categories
         this.switchToBuildingCategory();
-        
+    
         // Initialize UI
         updateBuildingSelector();
-        //createSaveLoadUI();
+        createSaveLoadUI();
+        
     }
     
     // Handle changes to the building graph (new roads or buildings)
@@ -255,13 +265,13 @@ export class Game {
             const person = this.state.graph.vertices[vid];
 
             // If this was the person's home, mark their home as null
-            if (person.data.home === vertex) {
+            if (person.data.home === vertex.id) {
                 console.warn(`Person's home was removed: ${person.id}`);
                 person.looseHome();
             }
             
             // If this was the person's workplace, make them quit the job
-            if (person.data.workplace === vertex) {
+            if (person.data.workplace === vertex.id) {
                 console.warn(`Person's workplace was removed: ${person.id}`);
                 person.looseWork();
             }

@@ -38,36 +38,9 @@ for (let i = 0; i < 3; i++){
     wildlifeImgs.push(loadImg(`o/wildlife${i}_c.png`))
 }
 
-class SeededRandom {
-    constructor(seed) {
-        // Convert seed to a 32-bit unsigned integer
-        this.seed = seed >>> 0;
-    }
-    
-    // Generate next random float between 0 and 1
-    next() {
-        // Mulberry32 algorithm
-        let t = this.seed += 0x6D2B79F5;
-        t = Math.imul(t ^ t >>> 15, t | 1);
-        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-        
-        // Convert to float between 0 and 1
-        return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    }
-    
-    // Reset the generator to initial seed state
-    reset(newSeed = null) {
-        this.seed = (newSeed !== null ? newSeed : this.originalSeed) >>> 0;
-    }
-    
-    // Store original seed for reset functionality
-    setSeed(seed) {
-        this.originalSeed = seed >>> 0;
-        this.seed = this.originalSeed;
-    }
-}
 
-const random = new SeededRandom(config.mapSeed);
+
+
 
 // cache colors 
 const colors = {
@@ -117,8 +90,8 @@ export function generateSmoothTerrain(mapWidth, mapHeight) {
     for (let y = 0; y < controlPointsY; y++) {
         controlPoints[y] = [];
         for (let x = 0; x < controlPointsX; x++) {
-            // Generate random height values only at control points
-            controlPoints[y][x] = random.next();
+            // Generate gameInstance.state.random height values only at control points
+            controlPoints[y][x] = gameInstance.state.random.next();
         }
     }
     
@@ -145,8 +118,8 @@ export function generateSmoothTerrain(mapWidth, mapHeight) {
             const top = lerp(v00, v10, sx);
             const bottom = lerp(v01, v11, sx);
             const height = lerp(top, bottom, sy);
-            const data1 = Math.floor(10*random.next());
-            const data2 = Math.floor(1000000*random.next());
+            const data1 = Math.floor(10*gameInstance.state.random.next());
+            const data2 = Math.floor(1000000*gameInstance.state.random.next());
 
             const h = Math.trunc(height*100)/100;
             
@@ -216,25 +189,25 @@ export function genMapObjects(baseTerrain, waterLevel, scaleFactor){
             const [height, data1, data2] = baseTerrain[y][x];
 
             if (height-waterLevel < 0.2 && data2 % 50 === 0 ) {
-                const Y = y*scaleFactor+Math.floor(random.next()*scaleFactor);
-                const X = x*scaleFactor+Math.floor(random.next()*scaleFactor);
-                const m = Math.floor(random.next()*6);
+                const Y = y*scaleFactor+Math.floor(gameInstance.state.random.next()*scaleFactor);
+                const X = x*scaleFactor+Math.floor(gameInstance.state.random.next()*scaleFactor);
+                const m = Math.floor(gameInstance.state.random.next()*6);
 
                 map_trees.push({x: X,y: Y,h: 3, m, type: 'tree' })
             } else if (height > 0.4 && height < 0.85 && data2 % 10000 === 1){
-                let Y = y*scaleFactor+Math.floor(random.next()*scaleFactor*10);
-                let X = x*scaleFactor+Math.floor(random.next()*scaleFactor*10);
+                let Y = y*scaleFactor+Math.floor(gameInstance.state.random.next()*scaleFactor*10);
+                let X = x*scaleFactor+Math.floor(gameInstance.state.random.next()*scaleFactor*10);
                 map_trees.push({x: X,y: Y,h: 3, m: 6, type: 'tree' })
                 
-                X+=Math.floor((random.next()-0.5)*scaleFactor*100)
-                Y+=Math.floor((random.next()-0.5)*scaleFactor*100)
-                map_wildlife.push({x: X, y: Y, m: Math.floor(random.next()*3), type: 'deer'})
-                X+=Math.floor((random.next()-0.5)*scaleFactor*10)
-                Y+=Math.floor((random.next()-0.5)*scaleFactor*10)
-                map_wildlife.push({x: X, y: Y, m: Math.floor(random.next()*3), type: 'deer'})
-                X+=Math.floor((random.next()-0.5)*scaleFactor*10)
-                Y+=Math.floor((random.next()-0.5)*scaleFactor*10)
-                map_wildlife.push({x: X, y: Y, m: Math.floor(random.next()*3), type: 'deer'})
+                X+=Math.floor((gameInstance.state.random.next()-0.5)*scaleFactor*100)
+                Y+=Math.floor((gameInstance.state.random.next()-0.5)*scaleFactor*100)
+                map_wildlife.push({x: X, y: Y, m: Math.floor(gameInstance.state.random.next()*3), type: 'deer'})
+                X+=Math.floor((gameInstance.state.random.next()-0.5)*scaleFactor*10)
+                Y+=Math.floor((gameInstance.state.random.next()-0.5)*scaleFactor*10)
+                map_wildlife.push({x: X, y: Y, m: Math.floor(gameInstance.state.random.next()*3), type: 'deer'})
+                X+=Math.floor((gameInstance.state.random.next()-0.5)*scaleFactor*10)
+                Y+=Math.floor((gameInstance.state.random.next()-0.5)*scaleFactor*10)
+                map_wildlife.push({x: X, y: Y, m: Math.floor(gameInstance.state.random.next()*3), type: 'deer'})
             }
         }
     }
