@@ -182,8 +182,8 @@ export class Game {
         }).bind(this));
 
         const map_center = {
-            x: this.state.terrain[0].length/2, 
-            y: this.state.terrain.length/2,
+            x: this.config.mapWidth/2, 
+            y: this.config.mapHeight/2,
         };
 
         this.state.townsquare = await createBuildingVertex(

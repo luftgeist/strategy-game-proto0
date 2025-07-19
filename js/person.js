@@ -405,7 +405,10 @@ export function drawPeople() {
 
             const jump = Math.sin(person.data.walking) * 1;
             
-            drawImg(ctx, screenX, screenY, img_male, width , height , 0, 0+jump, 1,)
+            const ts = gameInstance.config.terrain_scaling;
+            const [h] = gameInstance.state.terrain[Math.floor(person.y/ts)][Math.floor(person.x/ts)];
+            
+            drawImg(ctx, screenX, screenY, img_male, width , height , 0, 0+jump-h, 1,)
         }
     };
 }

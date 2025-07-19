@@ -10,7 +10,7 @@ const tiles = {
     rock: {img: loadImg('t/sandstone.png'), h: 1},
 };
 
-export function getTerrainTile(height, alpha, flags, waterLevel, x, y) {
+export function getTerrainTile(height, waterLevel) {
     if (height-waterLevel < tiles.oasis.h) {
         return tiles.oasis.img;
     } else if (height-waterLevel < tiles.steppe.h) {
@@ -145,7 +145,7 @@ export function generateSmoothTerrain(mapWidth, mapHeight) {
             const top = lerp(v00, v10, sx);
             const bottom = lerp(v01, v11, sx);
             const height = lerp(top, bottom, sy);
-            const data1 = Math.floor(10*random.next())+10;
+            const data1 = Math.floor(10*random.next());
             const data2 = Math.floor(1000000*random.next());
 
             const h = Math.trunc(height*100)/100;
@@ -191,8 +191,10 @@ export function getTerrainTypeAtPosition(terrain, x, y, mapWidth, mapHeight, wat
     if (x < 0 || x >= mapWidth || y < 0 || y >= mapHeight) {
         return null;
     }
+
+    const scaling = gameInstance.config.terrain_scaling;
     // Get the height value at the position
-    let [height, alpha ]= terrain[Math.floor(y)][Math.floor(x)];
+    let [height, alpha ]= terrain[Math.floor(y/scaling)][Math.floor(x/scaling)];
 
     // Determine terrain type based on height
     if (height-waterLevel < 0.2) {
@@ -206,57 +208,6 @@ export function getTerrainTypeAtPosition(terrain, x, y, mapWidth, mapHeight, wat
     }
 }
 
-
-export function scaleTerrain(terrain, scaleFactor = 2){
-    const new_terrain = [];
-    const new_width = terrain[0].length * scaleFactor;
-    const new_height = terrain.length * scaleFactor;
-
-    let counter = 0;
-    const maxCounter = scaleFactor*scaleFactor;
-
-    for (let y = 0; y < new_height; y++) {
-        // Initialize the terrain array with the correct dimensions
-        new_terrain[y] = new Array(new_width).fill(0);
-        for (let x = 0; x < new_width; x++) {
-            // Find the corresponding source pixel
-            const sourceX = Math.floor(x / scaleFactor);
-            const sourceY = Math.floor(y / scaleFactor);
-
-            if (counter >= maxCounter){
-                counter = 0;
-            }
-            
-            
-            const [height, data1, data2] = terrain[sourceY][sourceX];
-
-            const alpha = Math.floor(255*random.next());
-            
-            new_terrain[y][x] = [height, alpha, data1, data2, counter];
-
-            if (x % scaleFactor === 0 && terrain[sourceY][sourceX-1]){
-                const [_h] = terrain[sourceY][sourceX-1]
-                new_terrain[y][x] = [(_h+height)/2, alpha, data1, data2, counter]
-            }
-            if (x % scaleFactor === scaleFactor-1 && terrain[sourceY][sourceX+1]){
-                const [_h] = terrain[sourceY][sourceX+1]
-                new_terrain[y][x] = [(_h+height)/2, alpha, data1, data2, counter]
-            }
-            if (y % scaleFactor === 0 && terrain[sourceY-1]){
-                const [_h] = terrain[sourceY-1][sourceX]
-                new_terrain[y][x] = [(_h+height)/2, alpha, data1, data2, counter]
-            }
-            if (y % scaleFactor === scaleFactor-1 && terrain[sourceY+1]){
-                const [_h] = terrain[sourceY+1][sourceX]
-                new_terrain[y][x] = [(_h+height)/2, alpha, data1, data2, counter]
-            }
-            counter++;
-        }
-    }
-    
-    return new_terrain;
-}
-
 export function genMapObjects(baseTerrain, waterLevel, scaleFactor){
     const map_trees = [];
     const map_wildlife = [];
@@ -264,7 +215,7 @@ export function genMapObjects(baseTerrain, waterLevel, scaleFactor){
         for (let x = 0; x < baseTerrain[0].length; x++){
             const [height, data1, data2] = baseTerrain[y][x];
 
-            if (height-waterLevel < 0.2 && data2 % 8 === 0 ) {
+            if (height-waterLevel < 0.2 && data2 % 50 === 0 ) {
                 const Y = y*scaleFactor+Math.floor(random.next()*scaleFactor);
                 const X = x*scaleFactor+Math.floor(random.next()*scaleFactor);
                 const m = Math.floor(random.next()*6);
@@ -296,26 +247,25 @@ export function genMapObjects(baseTerrain, waterLevel, scaleFactor){
 
 export async function initTerrain(state, config){
     // generating giant terrain will take a lot of time, so we generate initial terrain and scale it
-    const base_terrain = generateSmoothTerrain(
+    const terrain = generateSmoothTerrain(
         Math.ceil(config.mapWidth/config.terrain_scaling), 
         Math.ceil(config.mapHeight/config.terrain_scaling)
     );
-    const terrain = scaleTerrain(base_terrain, config.terrain_scaling);
 
-    const { map_trees, map_wildlife } = genMapObjects(base_terrain, state.waterLevel, config.terrain_scaling);
+    const { map_trees, map_wildlife } = genMapObjects(terrain, state.waterLevel, config.terrain_scaling);
     
     for (let asset of Object.values(tiles)){
         await asset.img.loaded;
     }
 
-    const terrainCanvas = createTileCanvas(config, base_terrain, terrain, state.waterLevel);
+    const terrainCanvas = createTileCanvas(config, terrain, state.waterLevel);
     //const terrainCanvas = createTerrainCanvas(config, terrain, state.waterLevel);
     const terrainBitmap = await createTerrainBitmap(terrainCanvas);
 
     return {map_trees, map_wildlife, terrain, terrainBitmap }
 }
 
-function createTileCanvas(config, base_terrain, terrain, waterLevel){
+function createTileCanvas(config, base_terrain, waterLevel){
     console.log('create Tile Canvas')
     // Create off-screen canvas for the entire map
     const terrainCanvas = document.createElement('canvas');
@@ -323,30 +273,43 @@ function createTileCanvas(config, base_terrain, terrain, waterLevel){
     terrainCanvas.height = config.mapHeight*reso;
     const ctx = terrainCanvas.getContext('2d');
     const ratio = tiles.sand.img.naturalWidth/config.terrain_scaling;
-    const granularity = 1;
+    const granularity = 3;
     const cube_width = config.terrain_scaling*granularity*reso;
     const cube_height = tiles.sand.img.naturalHeight/ratio*granularity*reso;
-    const amplitude = 50;
+    const amplitude = 50
     // Render the entire terrain
     const hg = granularity/2;
     for (let y = 0; y < base_terrain.length; y+=hg) {
         for (let x = 0; x < base_terrain[0].length; x+=granularity) {
-            const [height, alpha, flags1, flags2] = base_terrain[Math.floor(y)][Math.floor(x)];
-            const cube = getTerrainTile(height, alpha, flags1, waterLevel);
+            x = Math.floor(x); y = Math.floor(y);
+            let _height;
+            let [height, data1, data2,] = base_terrain[y][x];
+            const rand = data1*y*x % 61;
+            let offsetx = 0; let offsety = 0;
+            const shift = 5;
+            if (rand === 0 && base_terrain[y-shift]){offsety = -shift}
+            else if (rand === 1 && base_terrain[y+shift]){offsety = shift}
+            else if (rand === 2 && base_terrain[y][x-shift]){offsetx = -shift}
+            else if (rand === 3 && base_terrain[y][x+shift]){offsetx = shift}
+            [_height, data1, data2,] = base_terrain[y+offsety][x+offsetx];
+            const cube = getTerrainTile(_height, waterLevel);
             const X = Math.floor(x*config.terrain_scaling*reso);
             const Y = Math.floor(y*config.terrain_scaling*reso);
-            drawImg(ctx, X, Y, cube, cube_width, cube_height, 0, height*reso*amplitude)
-            ctx.restore()
+            ctx.filter = 'brightness(0.9'+data1+')';
+            drawImg(ctx, X, Y, cube, cube_width, cube_height, 0, (-height)*reso*amplitude)
+            
         }
         for (let x = hg; x < base_terrain[0].length; x+=granularity) {
-            const [height, alpha, flags1, flags2] = base_terrain[Math.floor(y)][Math.floor(x)];
-            const cube = getTerrainTile(height, alpha, flags1, waterLevel);
+            const [height, data1, data2] = base_terrain[Math.floor(y)][Math.floor(x)];
+            const cube = getTerrainTile(height, waterLevel);
             const X = Math.floor(x*config.terrain_scaling*reso);
             const Y = Math.floor(y*config.terrain_scaling*reso+config.terrain_scaling*reso*0.25*granularity);
-            drawImg(ctx, X, Y, cube, cube_width, cube_height, 0, height*reso*amplitude)
-            ctx.restore()
+            ctx.filter = 'brightness(0.9'+data1+')';
+            drawImg(ctx, X, Y, cube, cube_width, cube_height, 0, (-height)*reso*amplitude)
+            
         }
     }
+    
     /*for (let y = 0; y < terrain.length; y++) {
         for (let x = 0; x < terrain[0].length; x++) {
             const [height, alpha, flags1, flags2] = terrain[y][x];
